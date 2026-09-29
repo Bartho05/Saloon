@@ -1,0 +1,214 @@
+import type { Service, Employee, Client, Appointment, TimeSlot, SalonSettings } from '@types';
+
+const API_BASE = import.meta.env.VITE_API_URL || '';
+
+class ApiError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public data?: any
+  ) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem('accessToken');
+  
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  };
+  
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+
+  const response = await fetch(`${API_BASE}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(response.status, data.error || 'Erro na requisição', data);
+  }
+
+  if (response.status === 204) return undefined as T;
+  return response.json();
+}
+
+// Auth
+export const authApi = {
+  ownerLogin: (email: string, password: string) =>
+    request<{ user: any; accessToken: string; refreshToken: string }>('/auth/owner/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+
+  employeeLogin: (accessCode: string) =>
+    request<{ user: any; accessToken: string; refreshToken: string }>('/auth/employee/login', {
+      method: 'POST',
+      body: JSON.stringify({ accessCode }),
+    }),
+
+  clientRequestCode: (phone: string) =>
+    request<{ sent: boolean; code?: string }>('/auth/client/request-code', {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    }),
+
+  clientVerifyCode: (phone: string, code: string) =>
+    request<{ client: Client; accessToken: string; refreshToken: string }>('/auth/client/verify-code', {
+      method: 'POST',
+      body: JSON.stringify({ phone, code }),
+    }),
+
+  refreshToken: (refreshToken: string) =>
+    request<{ accessToken: string; refreshToken: string }>('/auth/refresh', {
+      method: 'POST',
+      body: JSON.stringify({ refreshToken }),
+    }),
+
+  getMe: () => request<{ user: any } | { client: Client }>('/auth/me'),
+};
+
+// Services
+export const servicesApi = {
+  getAll: () => request<{ services: Service[] }>('/services'),
+  getById: (id: string) => request<{ service: Service }>(`/services/${id}`),
+};
+
+// Employees
+export const employeesApi = {
+  getActive: () => request<{ employees: Employee[] }>('/employees/active'),
+  getByService: (serviceId: string) =>
+    request<{ employees: Employee[] }>(`/employees/active?serviceId=${serviceId}`),
+};
+
+// Booking
+export const bookingApi = {
+  checkClient: (phone: string) =>
+    request<{ exists: boolean; client?: Client }>('/booking/check-client', {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    }),
+
+  getSlots: (employeeId: string, serviceId: string, date: string) =>
+    request<{ slots: TimeSlot[]; grouped: Record<number, string[]>; blocked?: boolean; reason?: string }>(
+      `/booking/slots?employeeId=${employeeId}&serviceId=${serviceId}&date=${date}`
+    ),
+
+  create: (data: {
+    serviceId: string;
+    employeeId: string;
+    startsAt: string;
+    client: { phone: string; fullName?: string; birthDate?: string };
+  }) =>
+    request<{ appointment: Appointment; client: Client; isNewClient: boolean }>('/booking/create', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getPublicServices: () => request<{ services: Service[] }>('/booking/public-services'),
+  getPublicEmployees: (serviceId?: string) =>
+    request<{ employees: Employee[] }>(
+      `/booking/public-employees${serviceId ? `?serviceId=${serviceId}` : ''}`
+    ),
+};
+
+// Client appointments
+export const clientApi = {
+  getAppointments: (params?: { status?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.page) query.set('page', params.page.toString());
+    if (params?.limit) query.set('limit', params.limit.toString());
+    return request<{ appointments: Appointment[]; pagination: any }>(`/client/appointments?${query}`);
+  },
+
+  cancelAppointment: (id: string, reason?: string) =>
+    request<{ message: string }>(`/client/appointments/${id}/cancel`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+};
+
+// Owner
+export const ownerApi = {
+  getDashboard: () => request<any>('/owner/appointments/today'),
+  getAppointments: (params?: { status?: string; startDate?: string; endDate?: string; employeeId?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.startDate) query.set('startDate', params.startDate);
+    if (params?.endDate) query.set('endDate', params.endDate);
+    if (params?.employeeId) query.set('employeeId', params.employeeId);
+    return request<{ appointments: Appointment[]; pagination: any }>(`/owner/appointments?${query}`);
+  },
+
+  // Services
+  getServices: () => request<{ services: Service[] }>('/owner/services'),
+  createService: (data: { name: string; description?: string; durationMinutes: number; price: number }) =>
+    request<{ service: Service }>('/owner/services', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateService: (id: string, data: Partial<Service>) =>
+    request<{ service: Service }>(`/owner/services/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteService: (id: string) =>
+    request<{ message: string }>(`/owner/services/${id}`, { method: 'DELETE' }),
+
+  // Employees
+  getEmployees: () => request<{ employees: Employee[] }>('/owner/employees'),
+  createEmployee: (data: { name: string; phone: string; specialties: string[]; serviceIds?: string[] }) =>
+    request<{ employee: Employee }>('/owner/employees', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateEmployee: (id: string, data: Partial<Employee>) =>
+    request<{ employee: Employee }>(`/owner/employees/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  regenerateAccessCode: (id: string) =>
+    request<{ employee: Employee }>(`/owner/employees/${id}/regenerate-code`, { method: 'POST' }),
+  deleteEmployee: (id: string) =>
+    request<{ message: string }>(`/owner/employees/${id}`, { method: 'DELETE' }),
+
+  // Settings
+  getSettings: () => request<{ settings: SalonSettings }>('/owner/settings'),
+  updateSettings: (data: Partial<SalonSettings>) =>
+    request<{ settings: SalonSettings }>('/owner/settings', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  testWhatsApp: (phone: string) =>
+    request<{ success: boolean; message?: string; error?: string }>('/owner/settings/test-whatsapp', {
+      method: 'POST',
+      body: JSON.stringify({ phone }),
+    }),
+};
+
+// Employee
+export const employeeApi = {
+  getProfile: () => request<{ employee: Employee }>('/employee/profile'),
+  getAppointments: (params?: { status?: string; startDate?: string; endDate?: string }) => {
+    const query = new URLSearchParams();
+    if (params?.status) query.set('status', params.status);
+    if (params?.startDate) query.set('startDate', params.startDate);
+    if (params?.endDate) query.set('endDate', params.endDate);
+    return request<{ appointments: Appointment[]; pagination: any }>(`/employee/appointments?${query}`);
+  },
+  getTodayAppointments: () => request<{ appointments: Appointment[] }>('/employee/appointments/today'),
+  updateAppointmentStatus: (id: string, status: Appointment['status'], notes?: string) =>
+    request<{ message: string }>(`/employee/appointments/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, notes }),
+    }),
+};
+
+export { ApiError };

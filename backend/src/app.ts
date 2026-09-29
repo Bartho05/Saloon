@@ -1,0 +1,58 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import morgan from 'morgan';
+import { env } from '@config/env';
+import { globalRateLimiter } from '@middlewares/rateLimiter';
+import { errorHandler, notFoundHandler } from '@middlewares/errorHandler';
+import authRoutes from '@routes/authRoutes';
+import publicRoutes from '@routes/publicRoutes';
+import ownerRoutes from '@routes/ownerRoutes';
+import employeeRoutes from '@routes/employeeRoutes';
+import clientRoutes from '@routes/clientRoutes';
+import { startCronJobs } from '@services/cronService';
+
+const app = express();
+
+// Trust proxy (para rate limiter funcionar atrás de proxy)
+app.set('trust proxy', 1);
+
+// Middlewares globais
+app.use(helmet({
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
+app.use(cors({
+  origin: env.FRONTEND_URL,
+  credentials: true,
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
+app.use(globalRateLimiter);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Rotas
+app.use('/auth', authRoutes);
+app.use('/', publicRoutes);
+app.use('/owner', ownerRoutes);
+app.use('/employee', employeeRoutes);
+app.use('/client', clientRoutes);
+
+// 404 handler
+app.use(notFoundHandler);
+
+// Error handler
+app.use(errorHandler);
+
+// Inicia jobs agendados
+if (env.NODE_ENV !== 'test') {
+  startCronJobs();
+}
+
+export default app;

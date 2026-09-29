@@ -1,0 +1,114 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  EMPLOYEE
+}
+
+enum AppointmentStatus {
+  SCHEDULED
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+model User {
+  id            String    @id @default(uuid())
+  name          String
+  phone         String    @unique
+  email         String?   @unique
+  passwordHash  String?
+  accessCode    String?   @unique
+  role          UserRole  @default(EMPLOYEE)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  appointments  Appointment[] @relation("EmployeeAppointments")
+
+  @@index([phone])
+  @@index([accessCode])
+  @@index([email])
+  @@map("users")
+}
+
+model Client {
+  id           String         @id @default(uuid())
+  fullName     String
+  phone        String         @unique
+  birthDate    DateTime
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  appointments Appointment[]
+
+  @@index([phone])
+  @@map("clients")
+}
+
+model Service {
+  id           String         @id @default(uuid())
+  name         String
+  description  String?
+  durationMinutes Int
+  price        Decimal        @db.Decimal(10, 2)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  appointments Appointment[]
+
+  @@index([isActive])
+  @@map("services")
+}
+
+model Appointment {
+  id          String             @id @default(uuid())
+  clientId    String
+  employeeId  String
+  serviceId   String
+  startsAt    DateTime
+  endsAt      DateTime
+  status      AppointmentStatus  @default(SCHEDULED)
+  notes       String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  client      Client             @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  employee    User               @relation("EmployeeAppointments", fields: [employeeId], references: [id], onDelete: Cascade)
+  service     Service            @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, startsAt])
+  @@index([clientId, startsAt])
+  @@index([status])
+  @@map("appointments")
+}
+
+model SalonSettings {
+  id                 Int      @id @default(1)
+  name               String
+  phone              String?
+  email              String?
+  address            String?
+  businessHours      Json     // { "0": null, "1": { "open": "09:00", "close": "19:00" }, ... }
+  timezone           String   @default("America/Sao_Paulo")
+  birthdayMessage    String?  // Template: "Olá {nome}! Feliz aniversário! Venha comemorar com a gente no {salao} 🎂"
+  whatsappApiConfig  Json?    // { "provider": "zapi", "instanceId": "", "token": "", "url": "" }
+  cancellationHours  Int      @default(2)
+  bufferMinutes      Int      @default(10)
+  slotInterval       Int      @default(30)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("salon_settings")
+}

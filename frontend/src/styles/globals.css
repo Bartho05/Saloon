@@ -60,6 +60,13 @@
   }
   input[type="number"] { -moz-appearance: textfield; }
 
+  /* Compensa o header fixo (h-16 mobile / h-20 desktop) ao pular para uma
+     âncora, senão o título da seção fica escondido atrás da navbar. */
+  section[id],
+  [id]:target {
+    scroll-margin-top: 5.5rem;
+  }
+
   /* Scrollbar */
   * {
     scrollbar-width: thin;

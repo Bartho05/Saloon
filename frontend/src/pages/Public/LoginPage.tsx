@@ -5,6 +5,7 @@ import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@contexts/ToastContext';
 import { formatPhone, onlyDigits } from '@utils/validation';
 import { Button, Card, CardContent, Container, Section, Input, Separator } from '@components/ui';
+import { Spinner } from '@components/Dashboard';
 
 type UserType = 'client' | 'owner' | 'employee';
 
@@ -83,7 +84,7 @@ function CodeInput({
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { requestClientCode, verifyClientCode, loginOwner, loginEmployee } = useAuth();
+  const { requestClientCode, verifyClientCode, loginOwner, loginEmployee, isAuthenticated, role, loading: authLoading } = useAuth();
   const { showToast } = useToast();
 
   const [userType, setUserType] = useState<UserType>('client');
@@ -98,6 +99,15 @@ export function LoginPage() {
   const [devCode, setDevCode] = useState<string | null>(null);
 
   const from = (location.state as any)?.from?.pathname;
+
+  // Sessão ainda válida: vai direto para o painel, sem pedir código de novo
+  useEffect(() => {
+    if (isAuthenticated && role) {
+      const home =
+        from ?? (role === 'OWNER' ? '/owner/dashboard' : role === 'EMPLOYEE' ? '/funcionario/agenda' : '/meus-agendamentos');
+      navigate(home, { replace: true });
+    }
+  }, [isAuthenticated, role, from, navigate]);
 
   useEffect(() => {
     setError(null);
@@ -204,6 +214,12 @@ export function LoginPage() {
     <div className="min-h-screen flex items-center">
       <Section size="sm" className="w-full flex items-center justify-center">
       <Container size="sm">
+        {authLoading && (
+          <div className="flex justify-center py-16">
+            <Spinner />
+          </div>
+        )}
+        {!authLoading && (
         <Card variant="padded">
           <CardContent>
             {/* Logo */}
@@ -352,6 +368,7 @@ export function LoginPage() {
             </p>
           </CardContent>
         </Card>
+        )}
       </Container>
       </Section>
     </div>

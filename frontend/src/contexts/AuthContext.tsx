@@ -26,41 +26,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const [loading, setLoading] = useState(true);
 
-  // Carrega tokens do localStorage na inicialização
+  // Reidrata a sessão salva no navegador.
+  //
+  // O código do WhatsApp só é pedido na primeira verificação (criação de
+  // conta) ou quando o refresh token expira (15 dias). O request() já
+  // renova o access token sozinho em 401, mas na montagem o primeiro getMe
+  // acontece antes de qualquer outra chamada — então tratamos o 401 aqui
+  // também, em vez de limpar a sessão.
   useEffect(() => {
     const initAuth = async () => {
-      const accessToken = localStorage.getItem('accessToken');
-      const refreshToken = localStorage.getItem('refreshToken');
-
-      if (accessToken && refreshToken) {
-        try {
-          const res = await authApi.getMe();
-          if ('user' in res) {
-            setState({
-              user: res.user,
-              accessToken,
-              refreshToken,
-              isAuthenticated: true,
-              role: res.user.role,
-            });
-          } else if ('client' in res) {
-            setState({
-              user: res.client,
-              accessToken,
-              refreshToken,
-              isAuthenticated: true,
-              role: 'CLIENT',
-            });
-          }
-        } catch {
-          // Token inválido, limpa
-          clearAuth();
-        }
+      if (!localStorage.getItem('accessToken') || !localStorage.getItem('refreshToken')) {
+        setLoading(false);
+        return;
       }
-      setLoading(false);
+
+      try {
+        // getMe já faz refresh+retry internamente quando o access expirou
+        const res = await authApi.getMe();
+
+        const user = 'user' in res ? res.user : res.client;
+        const role = 'user' in res ? res.user.role : ('CLIENT' as const);
+
+        setState({
+          user,
+          accessToken: localStorage.getItem('accessToken'),
+          refreshToken: localStorage.getItem('refreshToken'),
+          isAuthenticated: true,
+          role,
+        });
+      } catch {
+        clearAuth();
+      } finally {
+        setLoading(false);
+      }
     };
 
-    initAuth();
+    void initAuth();
+
+    // refreshSession() dispara este evento quando o refresh token também
+    // expirou — aí sim a sessão acabou de verdade.
+    const onExpired = () => setState({
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      isAuthenticated: false,
+      role: null,
+    });
+
+    window.addEventListener('session-expired', onExpired);
+    return () => window.removeEventListener('session-expired', onExpired);
   }, []);
 
   const clearAuth = () => {

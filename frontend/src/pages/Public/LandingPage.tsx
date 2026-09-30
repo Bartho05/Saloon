@@ -43,32 +43,8 @@ const locations = [
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-brand-white text-brand-black">
-      {/* Navigation */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-brand-white/95 backdrop-blur-md border-b border-brand-gray">
-        <Container>
-          <div className="flex items-center justify-between h-16 md:h-20">
-            <Link to="/" className="font-display font-bold text-display-sm tracking-tight" aria-label="MR. CUT Home">
-              MR. CUT
-            </Link>
-            <nav className="hidden md:flex items-center gap-8">
-              <Link to="#about" className="btn-minimal">Sobre</Link>
-              <Link to="#services" className="btn-minimal">Serviços</Link>
-              <Link to="#gallery" className="btn-minimal">Galeria</Link>
-              <Link to="#locations" className="btn-minimal">Unidades</Link>
-              <Link to="#reviews" className="btn-minimal">Avaliações</Link>
-              <Link to="/agendar" className="btn-solid">Agendar</Link>
-            </nav>
-            <div className="md:hidden">
-              <button className="btn-ghost p-2" aria-label="Menu">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
-              </button>
-            </div>
-          </div>
-        </Container>
-      </header>
-
       {/* Hero Section */}
-      <Section size="lg" className="relative pt-32 pb-20 md:pt-40 md:pb-32 overflow-hidden">
+      <Section size="lg" className="relative pt-12 pb-20 md:pt-20 md:pb-32 overflow-hidden">
         <Container>
           <div className="grid md:grid-cols-2 gap-12 lg:gap-20 items-center">
             <div className="max-w-xl">

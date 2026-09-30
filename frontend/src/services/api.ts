@@ -9,6 +9,55 @@ import type { Service, Employee, Client, Appointment, TimeSlot, SalonSettings } 
  */
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
+/** Promise de refresh em andamento, para deduplicar chamadas concorrentes. */
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** Limpa a sessão e avisa o AuthContext. */
+export function clearSession(): void {
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  window.dispatchEvent(new Event('session-expired'));
+}
+
+/**
+ * Renova o access token com o refresh token.
+ *
+ * Deduplicado por `refreshInFlight`: várias requisições que recebem 401 ao
+ * mesmo tempo (uma tela carregando 4 recursos) não disparam N chamadas.
+ */
+function refreshSession(): Promise<boolean> {
+  if (refreshInFlight) return refreshInFlight;
+
+  refreshInFlight = (async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) return false;
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      if (!res.ok) {
+        clearSession();
+        return false;
+      }
+
+      const data = await res.json();
+      localStorage.setItem('accessToken', data.accessToken);
+      localStorage.setItem('refreshToken', data.refreshToken);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
 class ApiError extends Error {
   constructor(
     public status: number,
@@ -20,14 +69,19 @@ class ApiError extends Error {
   }
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(
+  endpoint: string,
+  options: RequestInit = {},
+  /** interno: impede loop infinito de retry */
+  isRetry = false
+): Promise<T> {
   const token = localStorage.getItem('accessToken');
-  
+
   const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...options.headers,
   };
-  
+
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
@@ -36,6 +90,22 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     ...options,
     headers,
   });
+
+  // Access token expirado: renova uma vez e repete a requisição. Sem isso o
+  // usuário seria deslogado a cada 15 min de inatividade, mesmo com o
+  // refresh token válido.
+  //
+  // O guard exclui apenas /auth/refresh (senão renovar exigiria renovar).
+  // /auth/me precisa entrar: é a chamada da reidratação da sessão, e é
+  // justamente ela que sofre com access token vencido. `isRetry` garante
+  // que só haja uma tentativa.
+  const isRefreshCall = endpoint.startsWith('/auth/refresh');
+  if (response.status === 401 && !isRetry && !isRefreshCall) {
+    const refreshed = await refreshSession();
+    if (refreshed) {
+      return request<T>(endpoint, options, true);
+    }
+  }
 
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));

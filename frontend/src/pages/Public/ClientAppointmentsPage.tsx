@@ -1,29 +1,42 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { clientApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
-import { formatDateTime } from '@utils/date';
+import { formatDateTime, formatCurrency } from '@utils/date';
 import type { Appointment } from '@types';
+import { Container, Card, Button, Modal } from '@components/ui';
+import { PageHeader, StatusBadge, EmptyState, PageSpinner } from '@components/Dashboard';
+import { PlusIcon, CloseIcon } from '@components/icons';
 
-const STATUS_LABELS: Record<string, string> = {
+type Filter = 'all' | 'upcoming' | 'past';
+
+const TABS: { key: Filter; label: string }[] = [
+  { key: 'all', label: 'Todos' },
+  { key: 'upcoming', label: 'Próximos' },
+  { key: 'past', label: 'Anteriores' },
+];
+
+const STATUS_LABEL: Record<Appointment['status'], string> = {
   SCHEDULED: 'Agendado',
   COMPLETED: 'Concluído',
   CANCELLED: 'Cancelado',
   NO_SHOW: 'Não compareceu',
 };
 
-const STATUS_COLORS: Record<string, string> = {
-  SCHEDULED: 'bg-brand-gray text-brand-black',
-  COMPLETED: 'bg-green-50 text-green-800',
-  CANCELLED: 'bg-red-100 text-red-800',
-  NO_SHOW: 'bg-brand-gray text-brand-black',
+const STATUS_TONE: Record<Appointment['status'], 'info' | 'success' | 'danger' | 'warning'> = {
+  SCHEDULED: 'info',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+  NO_SHOW: 'warning',
 };
 
 export function ClientAppointmentsPage() {
   const { showToast } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'all' | 'upcoming' | 'past'>('all');
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
+  const [confirmCancel, setConfirmCancel] = useState<Appointment | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   useEffect(() => {
     loadAppointments();
@@ -41,161 +54,177 @@ export function ClientAppointmentsPage() {
     }
   };
 
-  const handleCancel = async (id: string) => {
-    if (!window.confirm('Tem certeza que deseja cancelar este agendamento?')) return;
-
-    setCancellingId(id);
+  const handleCancel = async () => {
+    if (!confirmCancel) return;
+    setCancelling(true);
     try {
-      await clientApi.cancelAppointment(id);
+      await clientApi.cancelAppointment(confirmCancel.id);
       showToast({ type: 'success', title: 'Agendamento cancelado' });
-      setAppointments(prev => prev.map(a => a.id === id ? { ...a, status: 'CANCELLED' as const } : a));
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === confirmCancel.id ? { ...a, status: 'CANCELLED' as const } : a))
+      );
+      setConfirmCancel(null);
     } catch (err: any) {
       showToast({ type: 'error', title: 'Erro', message: err.message });
     } finally {
-      setCancellingId(null);
+      setCancelling(false);
     }
   };
 
-  const filteredAppointments = appointments.filter(apt => {
+  const filtered = appointments.filter((apt) => {
     const isPast = new Date(apt.endsAt) < new Date();
-    if (activeTab === 'upcoming') return !isPast && apt.status === 'SCHEDULED';
-    if (activeTab === 'past') return isPast || apt.status !== 'SCHEDULED';
+    if (filter === 'upcoming') return !isPast && apt.status === 'SCHEDULED';
+    if (filter === 'past') return isPast || apt.status !== 'SCHEDULED';
     return true;
   });
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-black border-t-transparent" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
+
+  const upcomingCount = appointments.filter(
+    (a) => a.status === 'SCHEDULED' && new Date(a.startsAt) > new Date()
+  ).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-brand-black">Meus Agendamentos</h1>
-      </div>
+    <Container size="lg" className="py-10 md:py-16">
+      <PageHeader
+        title="Meus Agendamentos"
+        description={
+          upcomingCount > 0
+            ? `${upcomingCount} atendimento${upcomingCount !== 1 ? 's' : ''} marcado${upcomingCount !== 1 ? 's' : ''}`
+            : 'Você não tem agendamentos futuros'
+        }
+        action={
+          <Link to="/agendar">
+            <Button>
+              <PlusIcon className="w-4 h-4" />
+              Novo agendamento
+            </Button>
+          </Link>
+        }
+      />
 
-      {/* Tabs */}
-      <div className="flex gap-2 bg-brand-gray  p-1">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`px-4 py-2  text-sm font-medium transition-colors ${
-            activeTab === 'all' ? 'bg-brand-white text-brand-black shadow' : 'text-brand-grayMid hover:text-brand-black'
-          }`}
-        >
-          Todos
-        </button>
-        <button
-          onClick={() => setActiveTab('upcoming')}
-          className={`px-4 py-2  text-sm font-medium transition-colors ${
-            activeTab === 'upcoming' ? 'bg-brand-white text-brand-black shadow' : 'text-brand-grayMid hover:text-brand-black'
-          }`}
-        >
-          Próximos
-        </button>
-        <button
-          onClick={() => setActiveTab('past')}
-          className={`px-4 py-2  text-sm font-medium transition-colors ${
-            activeTab === 'past' ? 'bg-brand-white text-brand-black shadow' : 'text-brand-grayMid hover:text-brand-black'
-          }`}
-        >
-          Anteriores
-        </button>
-      </div>
-
-      {/* Lista */}
-      {filteredAppointments.length === 0 ? (
-        <div className="text-center py-12 bg-brand-grayLight ">
-          <svg className="w-16 h-16 text-brand-grayMid mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <h3 className="text-lg font-medium text-brand-black mb-1">Nenhum agendamento</h3>
-          <p className="text-brand-grayMid mb-4">
-            {activeTab === 'upcoming' 
-              ? 'Você não tem agendamentos futuros.' 
-              : activeTab === 'past' 
-                ? 'Nenhum agendamento anterior.' 
-                : 'Comece agendando seu primeiro serviço!'}
-          </p>
-          <a href="/agendar" className="inline-flex items-center gap-2 px-6 py-3 bg-brand-black text-white  font-medium hover:bg-brand-grayDark">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            Agendar Horário
-          </a>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredAppointments.map(apt => (
-            <AppointmentCard
-              key={apt.id}
-              appointment={apt}
-              onCancel={apt.status === 'SCHEDULED' && new Date(apt.startsAt) > new Date() ? () => handleCancel(apt.id) : undefined}
-              cancelling={cancellingId === apt.id}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function AppointmentCard({ appointment, onCancel, cancelling }: { 
-  appointment: Appointment; 
-  onCancel?: () => void;
-  cancelling?: boolean;
-}) {
-  const isPast = new Date(appointment.endsAt) < new Date();
-  const canCancel = onCancel && !isPast;
-
-  return (
-    <div className="bg-brand-white  border border-brand-gray p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h3 className="font-semibold text-brand-black">{appointment.service?.name || 'Serviço'}</h3>
-            <span className={`px-2 py-1 text-xs font-medium rounded-full ${STATUS_COLORS[appointment.status]}`}>
-              {STATUS_LABELS[appointment.status] || appointment.status}
-            </span>
-          </div>
-          
-          <div className="mt-2 flex flex-wrap items-center gap-4 text-sm text-brand-grayMid">
-            <span className="flex items-center gap-1">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              {formatDateTime(appointment.startsAt)} - {formatDateTime(appointment.endsAt).split(' ')[1]}
-            </span>
-            {appointment.employee && (
-              <span className="flex items-center gap-1">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                </svg>
-                {appointment.employee.name}
-              </span>
-            )}
-            <span className="font-medium text-brand-black">R$ {appointment.service?.price.toFixed(2) || '0.00'}</span>
-          </div>
-
-          {appointment.notes && (
-            <p className="mt-2 text-sm text-brand-grayMid bg-brand-grayLight px-3 py-2 ">
-              {appointment.notes}
-            </p>
-          )}
-        </div>
-
-        {canCancel && (
+      <div className="tabs mb-6" role="tablist" aria-label="Filtrar agendamentos">
+        {TABS.map((tab) => (
           <button
-            onClick={onCancel}
-            disabled={cancelling}
-            className="flex-shrink-0 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50  border border-red-200 disabled:opacity-50"
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={filter === tab.key}
+            onClick={() => setFilter(tab.key)}
+            className={`tab ${filter === tab.key ? 'tab-active' : 'tab-inactive'}`}
           >
-            {cancelling ? 'Cancelando...' : 'Cancelar'}
+            {tab.label}
           </button>
-        )}
+        ))}
       </div>
-    </div>
+
+      <Card>
+        {filtered.length === 0 ? (
+          <EmptyState
+            title="Nenhum agendamento"
+            description={
+              filter === 'upcoming'
+                ? 'Você não tem agendamentos futuros.'
+                : filter === 'past'
+                  ? 'Nenhum agendamento anterior.'
+                  : 'Agende seu primeiro serviço.'
+            }
+            action={
+              filter !== 'all' ? undefined : (
+                <Link to="/agendar">
+                  <Button>Agendar horário</Button>
+                </Link>
+              )
+            }
+          />
+        ) : (
+          <ul>
+            {filtered.map((apt) => {
+              const canCancel = apt.status === 'SCHEDULED' && new Date(apt.startsAt) > new Date();
+
+              return (
+                <li
+                  key={apt.id}
+                  className="px-5 md:px-6 py-5 flex flex-col md:flex-row md:items-center gap-4 border-b border-brand-gray last:border-b-0 hover:bg-brand-grayLight transition-colors duration-fast"
+                >
+                  {/* Data */}
+                  <div className="flex-shrink-0 md:w-24">
+                    <p className="font-display font-bold text-body-lg tabular-nums leading-none">
+                      {new Date(apt.startsAt).toLocaleDateString('pt-BR', { day: '2-digit' })}
+                    </p>
+                    <p className="text-caption text-brand-grayMid mt-1">
+                      {new Date(apt.startsAt).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}
+                    </p>
+                    <p className="text-caption text-brand-grayMid tabular-nums">
+                      {new Date(apt.startsAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2.5 flex-wrap">
+                      <h3 className="font-display font-medium text-body">
+                        {apt.service?.name || 'Serviço'}
+                      </h3>
+                    </div>
+                    <p className="text-body-sm text-brand-grayMid mt-0.5">
+                      {formatDateTime(apt.startsAt)}
+                      {apt.employee ? ` · ${apt.employee.name}` : ''}
+                    </p>
+                    {apt.notes && (
+                      <p className="text-caption text-brand-grayMid mt-1.5 border-l-2 border-brand-gray pl-2">
+                        {apt.notes}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4 md:gap-6 flex-shrink-0">
+                    <span className="font-display font-medium text-body tabular-nums">
+                      {formatCurrency(apt.service?.price || 0)}
+                    </span>
+                    <StatusBadge tone={STATUS_TONE[apt.status]}>
+                      {STATUS_LABEL[apt.status]}
+                    </StatusBadge>
+                    {canCancel && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmCancel(apt)}
+                        title="Cancelar agendamento"
+                        aria-label={`Cancelar agendamento de ${apt.service?.name || 'serviço'}`}
+                        className="p-2.5 text-brand-grayMid hover:text-brand-black hover:bg-brand-white border border-transparent hover:border-brand-gray transition-colors duration-fast"
+                      >
+                        <CloseIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
+
+      <Modal
+        open={Boolean(confirmCancel)}
+        onClose={() => setConfirmCancel(null)}
+        title="Cancelar agendamento"
+        description={
+          confirmCancel
+            ? `${confirmCancel.service?.name || 'Serviço'} em ${formatDateTime(confirmCancel.startsAt)}. O horário será liberado para outros clientes.`
+            : undefined
+        }
+        size="sm"
+      >
+        <div className="flex gap-3 justify-end">
+          <Button variant="outline" onClick={() => setConfirmCancel(null)} disabled={cancelling}>
+            Manter
+          </Button>
+          <Button onClick={handleCancel} disabled={cancelling} loading={cancelling}>
+            Cancelar agendamento
+          </Button>
+        </div>
+      </Modal>
+    </Container>
   );
 }
+
+export default ClientAppointmentsPage;

@@ -1,8 +1,25 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { ownerApi, servicesApi, employeesApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatDateTime, formatCurrency } from '@utils/date';
 import type { Appointment, Service, Employee } from '@types';
+import { Card, Button, Container } from '@components/ui';
+import { PageHeader, StatCard, StatusBadge, EmptyState, PageSpinner } from '@components/Dashboard';
+
+const statusLabels: Record<Appointment['status'], string> = {
+  SCHEDULED: 'Agendado',
+  COMPLETED: 'Concluído',
+  CANCELLED: 'Cancelado',
+  NO_SHOW: 'Não compareceu',
+};
+
+const statusTone: Record<Appointment['status'], 'info' | 'success' | 'danger' | 'warning'> = {
+  SCHEDULED: 'info',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+  NO_SHOW: 'warning',
+};
 
 export function OwnerDashboardPage() {
   const { showToast } = useToast();
@@ -31,21 +48,20 @@ export function OwnerDashboardPage() {
       ]);
 
       setTodayAppointments(todayRes.appointments);
-      
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      const todayAppointmentsFiltered = todayRes.appointments.filter(
+      const todayFiltered = todayRes.appointments.filter(
         (a: Appointment) => new Date(a.startsAt) >= today && new Date(a.startsAt) < tomorrow
       );
 
-      const todayRevenue = todayAppointmentsFiltered
+      const todayRevenue = todayFiltered
         .filter((a: Appointment) => a.status !== 'CANCELLED')
         .reduce((sum: number, a: Appointment) => sum + (a.service?.price || 0), 0);
 
-      // Stats do mês (simplificado)
       const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
       const monthAppointments = todayRes.appointments.filter(
         (a: Appointment) => new Date(a.startsAt) >= monthStart
@@ -55,7 +71,7 @@ export function OwnerDashboardPage() {
         .reduce((sum: number, a: Appointment) => sum + (a.service?.price || 0), 0);
 
       setStats({
-        todayCount: todayAppointmentsFiltered.length,
+        todayCount: todayFiltered.length,
         todayRevenue,
         monthCount: monthAppointments.length,
         monthRevenue,
@@ -69,127 +85,68 @@ export function OwnerDashboardPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+    <Container size="full" className="!px-0">
+      <PageHeader
+        title="Dashboard"
+        description="Visão geral do salão hoje e neste mês"
+        action={
+          <Link to="/owner/agenda">
+            <Button variant="outline">Ver agenda completa</Button>
+          </Link>
+        }
+      />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <StatCard
-          title="Agendamentos Hoje"
-          value={stats.todayCount}
-          icon=""
-          color="blue"
-        />
-        <StatCard
-          title="Faturamento Hoje"
-          value={formatCurrency(stats.todayRevenue)}
-          icon=""
-          color="green"
-        />
-        <StatCard
-          title="Agendamentos Mês"
-          value={stats.monthCount}
-          icon=""
-          color="purple"
-        />
-        <StatCard
-          title="Faturamento Mês"
-          value={formatCurrency(stats.monthRevenue)}
-          icon=""
-          color="emerald"
-        />
-        <StatCard
-          title="Funcionários Ativos"
-          value={stats.activeEmployees}
-          icon=""
-          color="orange"
-        />
-        <StatCard
-          title="Serviços Ativos"
-          value={stats.activeServices}
-          icon=""
-          color="pink"
-        />
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-10">
+        <StatCard label="Agendamentos hoje" value={stats.todayCount} />
+        <StatCard label="Faturamento hoje" value={formatCurrency(stats.todayRevenue)} />
+        <StatCard label="Agendamentos no mês" value={stats.monthCount} />
+        <StatCard label="Faturamento no mês" value={formatCurrency(stats.monthRevenue)} />
+        <StatCard label="Funcionários ativos" value={stats.activeEmployees} />
+        <StatCard label="Serviços ativos" value={stats.activeServices} />
       </div>
 
-      {/* Próximos Agendamentos */}
-      <div className="bg-white rounded-xl border border-gray-200">
-        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900">Agendamentos de Hoje</h2>
-          <a href="/owner/agenda" className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-            Ver todos →
-          </a>
+      <Card>
+        <div className="px-6 py-4 border-b border-brand-gray flex items-center justify-between">
+          <h2 className="font-display font-semibold text-body">Agendamentos de hoje</h2>
+          <Link to="/owner/agenda" className="btn-minimal">Ver todos</Link>
         </div>
-        
+
         {todayAppointments.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <p>Nenhum agendamento para hoje</p>
-          </div>
+          <EmptyState
+            title="Nenhum agendamento para hoje"
+            description="Quando houver agendamentos para o dia de hoje, eles aparecem aqui."
+          />
         ) : (
-          <div className="divide-y divide-gray-100">
-            {todayAppointments.slice(0, 10).map(apt => (
-              <div className="px-6 py-4 flex items-center justify-between gap-4">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-900">{apt.client?.fullName || 'Cliente'}</p>
-                  <p className="text-sm text-gray-500 flex items-center gap-2">
-                    <span>{formatDateTime(apt.startsAt).split(' ')[1]}</span>
-                    <span>•</span>
-                    <span>{apt.service?.name}</span>
-                    <span>•</span>
-                    <span>{apt.employee?.name}</span>
-                    <span className="font-medium text-blue-600">{formatCurrency(apt.service?.price || 0)}</span>
+          <ul>
+            {todayAppointments.slice(0, 10).map((apt) => (
+              <li
+                key={apt.id}
+                className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-gray last:border-b-0 hover:bg-brand-grayLight transition-colors duration-fast"
+              >
+                <div className="min-w-0">
+                  <p className="font-display font-medium text-body">
+                    {apt.client?.fullName || 'Cliente'}
+                  </p>
+                  <p className="text-body-sm text-brand-grayMid mt-1">
+                    {formatDateTime(apt.startsAt).split(' ')[1]} &middot; {apt.service?.name} &middot; {apt.employee?.name}
                   </p>
                 </div>
-                <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-                  apt.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-800' :
-                  apt.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
-                  apt.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {apt.status}
-                </span>
-              </div>
+                <div className="flex items-center gap-4 flex-shrink-0">
+                  <span className="font-display font-medium text-body">
+                    {formatCurrency(apt.service?.price || 0)}
+                  </span>
+                  <StatusBadge tone={statusTone[apt.status]}>{statusLabels[apt.status]}</StatusBadge>
+                </div>
+              </li>
             ))}
-          </div>
+          </ul>
         )}
-      </div>
-    </div>
+      </Card>
+    </Container>
   );
 }
 
-function StatCard({ title, value, icon, color }: { title: string; value: string | number; icon: string; color: string }) {
-  const colors = {
-    blue: 'bg-blue-50 text-blue-600',
-    green: 'bg-green-50 text-green-600',
-    purple: 'bg-purple-50 text-purple-600',
-    emerald: 'bg-emerald-50 text-emerald-600',
-    orange: 'bg-orange-50 text-orange-600',
-    pink: 'bg-pink-50 text-pink-600',
-  };
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-200 p-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-sm text-gray-500">{title}</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
-        </div>
-        <div className={`${colors[color as keyof typeof colors] || colors.blue} w-12 h-12 rounded-xl flex items-center justify-center text-2xl`}>
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
+export default OwnerDashboardPage;

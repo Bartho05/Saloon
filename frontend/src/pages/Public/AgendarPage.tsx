@@ -10,12 +10,13 @@ import { useToast } from '@contexts/ToastContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import type { Service, Employee, Client } from '@types';
+import { Button, Card, CardContent, Container, Section, Input, Badge } from '@components/ui';
 
 export function AgendarPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [state, actions] = useBookingFlow();
-  
+
   const [services, setServices] = useState<Service[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
@@ -56,25 +57,34 @@ export function AgendarPage() {
 
   // Passo 1: Seleção de Serviço
   const renderStep1 = () => (
-    <div className="space-y-4">
-      <p className="text-gray-600">Selecione o serviço desejado</p>
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+    <div className="space-y-6">
+      <Badge variant="outline" className="mb-2">SERVIÇO</Badge>
+      <p className="text-body-lg text-brand-grayMid">Selecione o serviço desejado</p>
+      <div className="grid-editorial-2 md:grid-editorial-3">
         {services.map(svc => (
-          <button
+          <Card
             key={svc.id}
+            variant="hover"
             onClick={() => actions.setService(svc)}
-            className={`
-              p-4 rounded-xl border-2 text-center transition-all
-              ${state.service?.id === svc.id 
-                ? 'border-blue-500 bg-blue-50' 
-                : 'border-gray-200 hover:border-gray-300'
-              }
-            `}
+            className={`cursor-pointer group ${state.service?.id === svc.id ? 'border-brand-black ring-2 ring-brand-black' : ''}`}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); actions.setService(svc); } }}
           >
-            <h4 className="font-medium text-gray-900">{svc.name}</h4>
-            <p className="text-sm text-gray-500">{svc.durationMinutes}min</p>
-            <p className="text-lg font-bold text-blue-600 mt-1">R$ {svc.price.toFixed(2)}</p>
-          </button>
+            <CardContent>
+              <div className="flex items-start justify-between mb-3">
+                <h3 className="font-display font-semibold text-body-lg">{svc.name}</h3>
+                <span className="font-display font-bold text-body-lg text-brand-black">
+                  R$ {svc.price.toFixed(2).replace('.', ',')}
+                </span>
+              </div>
+              <p className="text-caption text-brand-grayMid mb-4">{svc.durationMinutes} min</p>
+              <Button variant="minimal" className="w-full justify-center group-hover:text-brand-black">
+                Selecionar
+                <svg className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
+              </Button>
+            </CardContent>
+          </Card>
         ))}
       </div>
     </div>
@@ -82,31 +92,43 @@ export function AgendarPage() {
 
   // Passo 2: Seleção de Funcionário
   const renderStep2 = () => (
-    <div className="space-y-4">
-      <p className="text-gray-600">Escolha seu profissional</p>
+    <div className="space-y-6">
+      <Badge variant="outline" className="mb-2">PROFISSIONAL</Badge>
+      <p className="text-body-lg text-brand-grayMid">Escolha seu profissional</p>
       {filteredEmployees.length === 0 ? (
-        <div className="text-center py-8 text-gray-500">
-          Nenhum profissional disponível para este serviço
-        </div>
+        <Card variant="padded" className="text-center py-12">
+          <p className="text-body text-brand-grayMid">Nenhum profissional disponível para este serviço</p>
+          <Button variant="ghost" onClick={() => actions.goBack()} className="mt-4">
+            Voltar aos serviços
+          </Button>
+        </Card>
       ) : (
         <div className="space-y-3">
           {filteredEmployees.map(emp => (
-            <button
+            <Card
               key={emp.id}
+              variant="hover"
               onClick={() => actions.setEmployee(emp)}
-              className={`
-                w-full p-4 rounded-xl border-2 text-left transition-all
-                ${state.employee?.id === emp.id 
-                  ? 'border-blue-500 bg-blue-50' 
-                  : 'border-gray-200 hover:border-gray-300'
-                }
-              `}
+              className={`cursor-pointer ${state.employee?.id === emp.id ? 'border-brand-black ring-2 ring-brand-black' : ''}`}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); actions.setEmployee(emp); } }}
             >
-              <div className="font-medium text-gray-900">{emp.name}</div>
-              <div className="text-sm text-gray-500 mt-1">
-                {emp.specialties.join(', ')}
-              </div>
-            </button>
+              <CardContent className="flex items-center gap-4 p-4 md:p-6">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-brand-grayLight border border-brand-gray flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <span className="font-display font-bold text-body-lg text-brand-grayMid">
+                    {emp.name.charAt(0)}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-display font-semibold text-body-lg">{emp.name}</h3>
+                  <p className="text-caption text-brand-grayMid mt-1">{emp.specialties.join(', ')}</p>
+                </div>
+                {state.employee?.id === emp.id && (
+                  <svg className="w-6 h-6 text-brand-black flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+                )}
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
@@ -115,13 +137,17 @@ export function AgendarPage() {
 
   // Passo 3: Calendário
   const renderStep3 = () => (
-    <BookingCalendar
-      employeeId={state.employee!.id}
-      serviceId={state.service!.id}
-      serviceDuration={state.service!.durationMinutes}
-      selectedSlot={state.selectedSlot}
-      onSelectSlot={(slot) => actions.setSlot(slot.start, slot)}
-    />
+    <div className="space-y-6">
+      <Badge variant="outline" className="mb-2">DATA E HORA</Badge>
+      <p className="text-body-lg text-brand-grayMid">Selecione o melhor horário</p>
+      <BookingCalendar
+        employeeId={state.employee!.id}
+        serviceId={state.service!.id}
+        serviceDuration={state.service!.durationMinutes}
+        selectedSlot={state.selectedSlot}
+        onSelectSlot={(slot) => actions.setSlot(slot.start, slot)}
+      />
+    </div>
   );
 
   // Passo 4: Identificação
@@ -159,23 +185,25 @@ export function AgendarPage() {
     // Cliente já existe
     if (clientExists) {
       return (
-        <div className="text-center py-8">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-            </svg>
-          </div>
-          <h3 className="text-xl font-bold text-gray-900">Olá, {clientExists.fullName}!</h3>
-          <p className="text-gray-500 mt-1">Seus dados já estão cadastrados.</p>
-          <p className="text-sm text-gray-400 mt-2">
-            Nasc: {format(new Date(clientExists.birthDate), 'dd/MM/yyyy', { locale: ptBR })}
-          </p>
-          <button
-            onClick={() => actions.nextStep()}
-            className="mt-6 px-8 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700"
-          >
-            Confirmar Agendamento
-          </button>
+        <div className="space-y-6">
+          <Badge variant="outline" className="mb-2">SEUS DADOS</Badge>
+          <Card variant="padded" className="text-center py-8">
+            <CardContent>
+              <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-brand-grayLight border border-brand-gray flex items-center justify-center">
+                <span className="font-display font-bold text-display-sm text-brand-grayMid">
+                  {clientExists.fullName.charAt(0)}
+                </span>
+              </div>
+              <h3 className="font-display font-bold text-display-sm">Olá, {clientExists.fullName}!</h3>
+              <p className="text-body-sm text-brand-grayMid mt-2">Seus dados já estão cadastrados.</p>
+              <p className="text-caption text-brand-grayMid mt-1">
+                Nasc: {format(new Date(clientExists.birthDate), 'dd/MM/yyyy', { locale: ptBR })}
+              </p>
+              <Button variant="solid" size="lg" className="mt-6 w-full sm:w-auto" onClick={() => actions.nextStep()}>
+                Confirmar Agendamento
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       );
     }
@@ -183,43 +211,42 @@ export function AgendarPage() {
     // Formulário de telefone / novo cadastro
     return (
       <div className="space-y-6">
-        <PhoneInput
-          label="Telefone (WhatsApp)"
-          value={state.client?.phone || ''}
-          onChange={(phone) => actions.setClientPhone(phone)}
-          required
-          error={step4Error ?? undefined}
-          onEnterPress={() => handlePhoneSubmit(state.client?.phone || '')}
-        />
-        <button
-          onClick={() => handlePhoneSubmit(state.client?.phone || '')}
-          disabled={checkingPhone || !state.client?.phone}
-          className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium disabled:opacity-50"
-        >
-          {checkingPhone ? 'Verificando...' : 'Continuar'}
-        </button>
+        <Badge variant="outline" className="mb-2">SEUS DADOS</Badge>
+        <div className="space-y-4">
+          <PhoneInput
+            label="Telefone (WhatsApp)"
+            value={state.client?.phone || ''}
+            onChange={(phone) => actions.setClientPhone(phone)}
+            required
+            error={step4Error ?? undefined}
+            onEnterPress={() => handlePhoneSubmit(state.client?.phone || '')}
+          />
+          <Button variant="solid" size="lg" className="w-full" disabled={checkingPhone || !state.client?.phone} onClick={() => handlePhoneSubmit(state.client?.phone || '')}>
+            {checkingPhone ? 'Verificando...' : 'Continuar'}
+          </Button>
+        </div>
 
         {/* Formulário novo cliente */}
         {!clientExists && state.client?.phone && (
-          <form onSubmit={handleNewClientSubmit} className="space-y-4 pt-6 border-t">
-            <h4 className="font-medium text-gray-900">Primeira vez por aqui? Complete seu cadastro:</h4>
-            <input
+          <form onSubmit={handleNewClientSubmit} className="space-y-4 pt-6 border-t border-brand-gray">
+            <h4 className="font-display font-medium text-body">Primeira vez por aqui? Complete seu cadastro:</h4>
+            <Input
+              label="Nome completo"
               name="fullName"
               type="text"
-              placeholder="Nome completo"
+              placeholder="Seu nome completo"
               required
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
             />
-            <input
+            <Input
+              label="Data de nascimento"
               name="birthDate"
               type="date"
               required
               max={format(new Date(), 'yyyy-MM-dd')}
-              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
             />
-            <button type="submit" className="w-full py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700">
+            <Button variant="solid" size="lg" type="submit" className="w-full">
               Agendar e Criar Conta
-            </button>
+            </Button>
           </form>
         )}
       </div>
@@ -229,7 +256,7 @@ export function AgendarPage() {
   // Passo 5: Confirmação
   const renderStep5 = () => {
     const isNewClient = !clientExists;
-    
+
     const handleConfirm = async () => {
       setConfirmLoading(true);
       try {
@@ -243,13 +270,13 @@ export function AgendarPage() {
             birthDate: state.client!.birthDate,
           },
         });
-        
+
         showToast({ type: 'success', title: 'Agendamento confirmado!', message: 'Você receberá confirmação no WhatsApp.' });
         navigate('/agendamento-confirmado');
       } catch (err: any) {
         if (err.status === 409) {
           showToast({ type: 'error', title: 'Horário indisponível', message: 'Este horário foi preenchido. Escolha outro.' });
-          actions.goBack(); // volta pro calendário
+          actions.goBack();
         } else {
           showToast({ type: 'error', title: 'Erro ao agendar', message: err.message || 'Tente novamente.' });
         }
@@ -275,14 +302,27 @@ export function AgendarPage() {
   const stepsContent = [renderStep1, renderStep2, renderStep3, renderStep4, renderStep5];
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
-      <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm p-6 md:p-8">
-        <BookingProgress currentStep={state.currentStep} completedSteps={completedSteps} />
-        
+    <Section className="min-h-screen py-12 md:py-16 lg:py-20">
+      <Container size="lg">
+        {/* Header */}
+        <div className="mb-8 md:mb-12">
+          <Badge variant="outline" className="mb-3">AGENDAMENTO</Badge>
+          <h1 className="text-display-md md:text-display-lg mb-2">Novo Agendamento</h1>
+          <p className="text-body-lg text-brand-grayMid">5 passos rápidos — 2 minutos</p>
+        </div>
+
+        {/* Progress */}
+        <div className="mb-8 md:mb-10">
+          <BookingProgress currentStep={state.currentStep} completedSteps={completedSteps} />
+        </div>
+
+        {/* Content */}
         <div className="animate-fade-in">
           {stepsContent[state.currentStep]()}
         </div>
-      </div>
-    </div>
+      </Container>
+    </Section>
   );
 }
+
+export default AgendarPage;

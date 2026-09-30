@@ -56,7 +56,7 @@ export function OwnerSchedulePage() {
 
   const getEmployeeColor = (employeeId: string) => {
     const colors = [
-      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500',
+      'bg-brand-black', 'bg-green-500', 'bg-purple-500', 'bg-orange-500',
       'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-red-500',
     ];
     let hash = 0;
@@ -69,7 +69,7 @@ export function OwnerSchedulePage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent" />
+        <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-black border-t-transparent" />
       </div>
     );
   }
@@ -77,17 +77,17 @@ export function OwnerSchedulePage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Agenda Geral</h1>
+        <h1 className="text-2xl font-bold text-brand-black">Agenda Geral</h1>
         <div className="flex gap-2">
           <button
             onClick={() => setViewMode('list')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${viewMode === 'list' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+            className={`px-4 py-2  text-sm font-medium ${viewMode === 'list' ? 'bg-brand-black text-white' : 'bg-brand-gray text-brand-black'}`}
           >
             Lista
           </button>
           <button
             onClick={() => setViewMode('calendar')}
-            className={`px-4 py-2 rounded-lg text-sm font-medium ${viewMode === 'calendar' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700'}`}
+            className={`px-4 py-2  text-sm font-medium ${viewMode === 'calendar' ? 'bg-brand-black text-white' : 'bg-brand-gray text-brand-black'}`}
           >
             Calendário
           </button>
@@ -95,14 +95,14 @@ export function OwnerSchedulePage() {
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4">
+      <div className="bg-brand-white  border border-brand-gray p-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+            <label className="block text-sm font-medium text-brand-black mb-1">Status</label>
             <select
               value={filters.status}
               onChange={e => handleFilterChange('status', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+              className="w-full px-4 py-2 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
             >
               <option value="">Todos</option>
               <option value="SCHEDULED">Agendados</option>
@@ -112,11 +112,11 @@ export function OwnerSchedulePage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Profissional</label>
+            <label className="block text-sm font-medium text-brand-black mb-1">Profissional</label>
             <select
               value={filters.employeeId}
               onChange={e => handleFilterChange('employeeId', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+              className="w-full px-4 py-2 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
             >
               <option value="">Todos</option>
               {employees.map(emp => (
@@ -125,25 +125,25 @@ export function OwnerSchedulePage() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Início</label>
+            <label className="block text-sm font-medium text-brand-black mb-1">Data Início</label>
             <input
               type="date"
               value={filters.startDate}
               onChange={e => handleFilterChange('startDate', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+              className="w-full px-4 py-2 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Data Fim</label>
+            <label className="block text-sm font-medium text-brand-black mb-1">Data Fim</label>
             <input
               type="date"
               value={filters.endDate}
               onChange={e => handleFilterChange('endDate', e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+              className="w-full px-4 py-2 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
             />
           </div>
           <div className="flex items-end">
-            <button onClick={clearFilters} className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-medium">
+            <button onClick={clearFilters} className="w-full px-4 py-2 border border-brand-gray text-brand-black  hover:bg-brand-grayLight font-medium">
               Limpar Filtros
             </button>
           </div>
@@ -151,23 +151,23 @@ export function OwnerSchedulePage() {
       </div>
 
       {viewMode === 'list' ? (
-        <div className="bg-white rounded-xl border border-gray-200">
+        <div className="bg-brand-white  border border-brand-gray">
           {appointments.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="text-center py-12 text-brand-grayMid">
+              <svg className="w-12 h-12 mx-auto mb-3 text-brand-grayMid" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <p>Nenhum agendamento encontrado</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="divide-y divide-brand-gray">
               {appointments.map(apt => (
-                <div key={apt.id} className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-gray-50">
+                <div key={apt.id} className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-brand-grayLight">
                   <div className="flex items-center gap-4 flex-1 min-w-0">
                     <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getEmployeeColor(apt.employeeId) }} />
                     <div className="min-w-0">
-                      <p className="font-medium text-gray-900 truncate">{apt.client?.fullName || 'Cliente'}</p>
-                      <p className="text-sm text-gray-500 flex items-center gap-2">
+                      <p className="font-medium text-brand-black truncate">{apt.client?.fullName || 'Cliente'}</p>
+                      <p className="text-sm text-brand-grayMid flex items-center gap-2">
                         <span>{formatDateTime(apt.startsAt)}</span>
                         <span>•</span>
                         <span>{apt.service?.name}</span>
@@ -177,7 +177,7 @@ export function OwnerSchedulePage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="font-medium text-blue-600">{formatCurrency(apt.service?.price || 0)}</span>
+                    <span className="font-medium text-brand-black">{formatCurrency(apt.service?.price || 0)}</span>
                     <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(apt.status)}`}>
                       {getStatusLabel(apt.status)}
                     </span>
@@ -188,8 +188,8 @@ export function OwnerSchedulePage() {
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <p className="text-gray-500 text-center py-8">Visualização de calendário em desenvolvimento</p>
+        <div className="bg-brand-white  border border-brand-gray p-4">
+          <p className="text-brand-grayMid text-center py-8">Visualização de calendário em desenvolvimento</p>
         </div>
       )}
     </div>
@@ -198,11 +198,11 @@ export function OwnerSchedulePage() {
 
 function getStatusColor(status: string): string {
   switch (status) {
-    case 'SCHEDULED': return 'bg-blue-100 text-blue-800';
-    case 'COMPLETED': return 'bg-green-100 text-green-800';
+    case 'SCHEDULED': return 'bg-brand-gray text-brand-black';
+    case 'COMPLETED': return 'bg-green-50 text-green-800';
     case 'CANCELLED': return 'bg-red-100 text-red-800';
-    case 'NO_SHOW': return 'bg-gray-100 text-gray-800';
-    default: return 'bg-gray-100 text-gray-800';
+    case 'NO_SHOW': return 'bg-brand-gray text-brand-black';
+    default: return 'bg-brand-gray text-brand-black';
   }
 }
 

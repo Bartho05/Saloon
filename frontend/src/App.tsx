@@ -64,7 +64,7 @@ function App() {
 
       {/* Redirects */}
       <Route path="/login/cliente" element={<Navigate to="/login" replace />} />
-      <Route path="/agendamento-confirmado" element={<div className="min-h-screen flex items-center justify-center p-4"><div className="text-center"><div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4"><svg className="w-10 h-10 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div><h1 className="text-2xl font-bold text-gray-900 mb-2">Agendamento Confirmado!</h1><p className="text-gray-600 mb-6">Você receberá a confirmação via WhatsApp em instantes.</p><a href="/" className="px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 inline-block">Voltar ao Início</a></div></div>} />
+      <Route path="/agendamento-confirmado" element={<div className="min-h-screen flex items-center justify-center p-4"><div className="text-center"><div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4"><svg className="w-10 h-10 text-green-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg></div><h1 className="text-2xl font-bold text-gray-900 mb-2">Agendamento Confirmado!</h1><p className="text-gray-600 mb-6">Você receberá a confirmação via WhatsApp em instantes.</p><a href="/" className="px-6 py-3 bg-brand-black text-white rounded-xl font-medium hover:bg-brand-grayDark inline-block">Voltar ao Início</a></div></div>} />
       
       {/* 404 */}
       <Route path="*" element={<Navigate to="/" replace />} />

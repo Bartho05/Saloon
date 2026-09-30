@@ -4,13 +4,14 @@ import { PhoneInput } from '@components/PhoneInput';
 import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@contexts/ToastContext';
 import { formatPhone, onlyDigits } from '@utils/validation';
+import { Button, Card, CardContent, Container, Section, Input, Separator } from '@components/ui';
 
 type UserType = 'client' | 'owner' | 'employee';
 
-const TABS: { key: UserType; label: string; icon: string }[] = [
-  { key: 'client', label: 'Cliente', icon: '' },
-  { key: 'owner', label: 'Proprietário', icon: '' },
-  { key: 'employee', label: 'Funcionário', icon: '' },
+const TABS: { key: UserType; label: string }[] = [
+  { key: 'client', label: 'Cliente' },
+  { key: 'owner', label: 'Proprietário' },
+  { key: 'employee', label: 'Funcionário' },
 ];
 
 function CodeInput({
@@ -42,13 +43,11 @@ function CodeInput({
   };
 
   return (
-    <div className="flex justify-center gap-2">
+    <div className="flex justify-center gap-3">
       {Array.from({ length: 6 }, (_, i) => (
         <input
           key={i}
-          ref={(el) => {
-            refs.current[i] = el;
-          }}
+          ref={(el) => { refs.current[i] = el; }}
           type="text"
           inputMode="numeric"
           autoComplete="one-time-code"
@@ -69,7 +68,11 @@ function CodeInput({
             refs.current[Math.min(digits.length, 5)]?.focus();
             if (digits.length === 6) onComplete?.();
           }}
-          className="w-11 h-12 sm:w-12 sm:h-14 text-center text-2xl font-semibold rounded-xl border-2 border-gray-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none disabled:bg-gray-100"
+          className="w-12 h-14 sm:w-14 sm:h-16 text-center text-2xl sm:text-3xl font-display font-bold
+                     border-2 border-brand-gray rounded-none
+                     focus:border-brand-black focus:outline-none focus:ring-0
+                     disabled:bg-brand-grayLight disabled:cursor-not-allowed
+                     transition-colors duration-fast"
           aria-label={`Dígito ${i + 1}`}
         />
       ))}
@@ -196,210 +199,158 @@ export function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-10">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-sm p-8">
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Entrar</h1>
-          <p className="text-sm text-gray-600 mt-1">Escolha como você quer acessar</p>
-        </div>
-
-        {/* Abas */}
-        <div className="flex gap-1 mb-6 bg-gray-100 rounded-xl p-1" role="tablist">
-          {TABS.map((tab) => (
-            <button
-              key={tab.key}
-              type="button"
-              role="tab"
-              aria-selected={userType === tab.key}
-              onClick={() => {
-                setUserType(tab.key);
-                setStep('phone');
-                setError(null);
-              }}
-              className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 py-2 px-2 rounded-lg text-xs sm:text-sm font-medium transition-colors ${
-                userType === tab.key
-                  ? 'bg-white text-blue-600 shadow'
-                  : 'text-gray-600 hover:text-gray-900'
-              }`}
-            >
-              <span aria-hidden>{tab.icon}</span>
-              <span>{tab.label}</span>
-            </button>
-          ))}
-        </div>
-
-        {/* ------------------------------------------------------------ CLIENTE */}
-        {userType === 'client' && step === 'phone' && (
-          <div className="space-y-5">
-            <p className="text-sm text-gray-600 text-center">
-              Digite seu telefone para receber o código de acesso via WhatsApp
-            </p>
-            <PhoneInput
-              label="Telefone (WhatsApp)"
-              value={phone}
-              onChange={(v) => {
-                setPhone(v);
-                setError(null);
-              }}
-              required
-              error={error || undefined}
-              onEnterPress={() => handlePhoneSubmit(phone)}
-            />
-            <button
-              type="button"
-              onClick={() => handlePhoneSubmit(phone)}
-              disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Enviando...' : 'Enviar código'}
-            </button>
-          </div>
-        )}
-
-        {userType === 'client' && step === 'code' && (
-          <div className="space-y-5">
-            <div className="text-center">
-              <p className="text-sm text-gray-600">Código enviado para</p>
-              <p className="font-semibold text-gray-900 text-lg">{formatPhone(phone)}</p>
+    <Section className="min-h-screen flex items-center justify-center px-4 py-16">
+      <Container size="sm">
+        <Card variant="padded">
+          <CardContent>
+            {/* Logo */}
+            <div className="text-center mb-10">
+              <span className="font-display font-bold text-display-sm tracking-tight">MR. CUT</span>
+              <p className="text-body-sm text-brand-grayMid mt-2">Acesse sua conta</p>
             </div>
 
-            {devCode && (
-              <div className="rounded-xl bg-amber-50 border border-amber-200 p-3 text-center">
-                <p className="text-xs text-amber-800">
-                  <strong>Modo desenvolvimento</strong> — o código foi preenchido automaticamente e
-                  também aparece no terminal do backend.
-                </p>
+            {/* Tabs */}
+            <div className="tabs mb-8" role="tablist">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.key}
+                  type="button"
+                  role="tab"
+                  aria-selected={userType === tab.key}
+                  onClick={() => {
+                    setUserType(tab.key);
+                    setStep('phone');
+                    setError(null);
+                  }}
+                  className="tab"
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 text-body-sm text-center" role="alert">
+                {error}
               </div>
             )}
 
-            <CodeInput value={code} onChange={setCode} onComplete={handleCodeSubmit} disabled={loading} />
-
-            {error && (
-              <p className="text-center text-sm text-red-600" role="alert">
-                {error}
-              </p>
+            {/* ------------------------------------------------------------ CLIENTE */}
+            {userType === 'client' && step === 'phone' && (
+              <div className="space-y-6">
+                <PhoneInput
+                  label="Telefone (WhatsApp)"
+                  value={phone}
+                  onChange={(v) => { setPhone(v); setError(null); }}
+                  required
+                  error={error || undefined}
+                  onEnterPress={() => handlePhoneSubmit(phone)}
+                />
+                <Button variant="solid" size="lg" className="w-full" disabled={loading} onClick={() => handlePhoneSubmit(phone)}>
+                  {loading ? 'Enviando...' : 'Enviar código'}
+                </Button>
+              </div>
             )}
 
-            <button
-              type="button"
-              onClick={handleCodeSubmit}
-              disabled={loading || code.length !== 6}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Verificando...' : 'Confirmar'}
-            </button>
+            {userType === 'client' && step === 'code' && (
+              <div className="space-y-6">
+                <div className="text-center">
+                  <p className="text-body-sm text-brand-grayMid">Código enviado para</p>
+                  <p className="font-display font-semibold text-body-lg mt-1">{formatPhone(phone)}</p>
+                </div>
 
-            <div className="flex items-center justify-between text-sm">
-              <button
-                type="button"
-                onClick={handleResend}
-                disabled={loading}
-                className="text-blue-600 hover:text-blue-700 font-medium disabled:opacity-50"
-              >
-                Reenviar código
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStep('phone');
-                  setCode('');
-                  setError(null);
-                }}
-                className="text-gray-500 hover:text-gray-700"
-              >
-                Trocar número
-              </button>
-            </div>
-          </div>
-        )}
+                {devCode && (
+                  <div className="p-4 bg-brand-grayLight border border-brand-gray text-center">
+                    <p className="text-caption text-brand-grayMid">
+                      <strong>Modo desenvolvimento</strong> — o código foi preenchido automaticamente e
+                      também aparece no terminal do backend.
+                    </p>
+                  </div>
+                )}
 
-        {/* --------------------------------------------------------------- DONO */}
-        {userType === 'owner' && (
-          <form onSubmit={handleOwnerLogin} className="space-y-5">
-            <div>
-              <label htmlFor="owner-email" className="block text-sm font-medium text-gray-700 mb-1">
-                E-mail
-              </label>
-              <input
-                id="owner-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                placeholder="seu@email.com"
-              />
-            </div>
-            <div>
-              <label htmlFor="owner-password" className="block text-sm font-medium text-gray-700 mb-1">
-                Senha
-              </label>
-              <input
-                id="owner-password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                autoComplete="current-password"
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                placeholder="••••••"
-              />
-            </div>
-            {error && (
-              <p className="text-center text-sm text-red-600" role="alert">
-                {error}
-              </p>
+                <CodeInput value={code} onChange={setCode} onComplete={handleCodeSubmit} disabled={loading} />
+
+                <Button variant="solid" size="lg" className="w-full" disabled={loading || code.length !== 6} onClick={handleCodeSubmit}>
+                  {loading ? 'Verificando...' : 'Confirmar'}
+                </Button>
+
+                <div className="flex items-center justify-between text-body-sm">
+                  <button type="button" onClick={handleResend} disabled={loading} className="btn-minimal">
+                    Reenviar código
+                  </button>
+                  <button type="button" onClick={() => { setStep('phone'); setCode(''); setError(null); }} className="btn-minimal">
+                    Trocar número
+                  </button>
+                </div>
+              </div>
             )}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Entrando...' : 'Entrar'}
-            </button>
-          </form>
-        )}
 
-        {/* ------------------------------------------------------- FUNCIONÁRIO */}
-        {userType === 'employee' && (
-          <form onSubmit={handleEmployeeLogin} className="space-y-5">
-            <p className="text-sm text-gray-600 text-center">
-              Digite o código de acesso de 6 dígitos recebido do salão
+            {/* --------------------------------------------------------------- DONO */}
+            {userType === 'owner' && (
+              <form onSubmit={handleOwnerLogin} className="space-y-5">
+                <Input
+                  label="E-mail"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  placeholder="seu@email.com"
+                />
+                <Input
+                  label="Senha"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  placeholder="••••••"
+                />
+                <Button variant="solid" size="lg" type="submit" className="w-full" disabled={loading}>
+                  {loading ? 'Entrando...' : 'Entrar'}
+                </Button>
+              </form>
+            )}
+
+            {/* ------------------------------------------------------- FUNCIONÁRIO */}
+            {userType === 'employee' && (
+              <form onSubmit={handleEmployeeLogin} className="space-y-6">
+                <p className="text-body-sm text-brand-grayMid text-center">
+                  Digite o código de acesso de 6 dígitos recebido do salão
+                </p>
+                <div>
+                  <label htmlFor="emp-code" className="field-label">Código de acesso</label>
+                  <input
+                    id="emp-code"
+                    type="text"
+                    inputMode="numeric"
+                    value={accessCode}
+                    onChange={(e) => setAccessCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    required
+                    maxLength={6}
+                    autoComplete="one-time-code"
+                    className="w-full bg-transparent border-none border-b-2 border-brand-gray
+                               px-0 py-3 text-center text-3xl sm:text-4xl font-display font-bold
+                               tracking-[0.3em] text-brand-black placeholder:text-brand-grayMid
+                               focus:border-brand-black focus:outline-none focus:ring-0
+                               transition-colors duration-fast"
+                    placeholder="000000"
+                  />
+                </div>
+                <Button variant="solid" size="lg" type="submit" className="w-full" disabled={loading || accessCode.length !== 6}>
+                  {loading ? 'Entrando...' : 'Entrar'}
+                </Button>
+              </form>
+            )}
+
+            <Separator className="my-8" />
+            <p className="text-caption text-brand-grayMid text-center">
+              MR. CUT — Barbearia Premium
             </p>
-            <div>
-              <label htmlFor="emp-code" className="sr-only">
-                Código de acesso
-              </label>
-              <input
-                id="emp-code"
-                type="text"
-                inputMode="numeric"
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                required
-                maxLength={6}
-                autoComplete="one-time-code"
-                className="w-full px-4 py-4 border border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-center text-3xl tracking-[0.5em] font-semibold"
-                placeholder="000000"
-              />
-            </div>
-            {error && (
-              <p className="text-center text-sm text-red-600" role="alert">
-                {error}
-              </p>
-            )}
-            <button
-              type="submit"
-              disabled={loading || accessCode.length !== 6}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium disabled:opacity-50 transition-colors"
-            >
-              {loading ? 'Entrando...' : 'Entrar'}
-            </button>
-          </form>
-        )}
-      </div>
-    </div>
+          </CardContent>
+        </Card>
+      </Container>
+    </Section>
   );
 }
 

@@ -35,8 +35,8 @@ describe('PhoneInput', () => {
   });
 
   it('shows valid indicator when complete', () => {
-    render(<PhoneInput value="(11) 99999-9999" onChange={vi.fn()} />);
-    expect(screen.getByText('✓ Telefone válido')).toBeInTheDocument();
+    render(<PhoneInput value="11999999999" onChange={vi.fn()} />);
+    expect(screen.getByText('Telefone válido')).toBeInTheDocument();
   });
 
   it('calls onEnterPress when Enter pressed', () => {

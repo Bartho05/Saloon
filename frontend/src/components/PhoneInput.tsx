@@ -72,16 +72,17 @@ export function PhoneInput({
 
   const hasError = Boolean(error) || (displayValue.length > 0 && !validation.valid);
   const showHint = !error && displayValue.length > 0 && !validation.valid && validation.error;
+  const inputId = 'phone-input';
 
   return (
     <div className="w-full">
       {label && (
-        <label htmlFor="phone-input" className="block text-sm font-medium text-gray-700 mb-1">
-          {label} {required && <span className="text-red-500">*</span>}
+        <label htmlFor={inputId} className="field-label">
+          {label} {required && <span className="text-red-500" aria-hidden="true">*</span>}
         </label>
       )}
       <input
-        id="phone-input"
+        id={inputId}
         ref={inputRef}
         type="tel"
         inputMode="numeric"
@@ -94,27 +95,28 @@ export function PhoneInput({
         placeholder="(31) 98888-7777"
         maxLength={16}
         className={[
-          'w-full px-4 py-3 rounded-lg border transition-colors tabular-nums',
-          'placeholder:text-gray-400',
-          disabled ? 'bg-gray-100 cursor-not-allowed' : '',
+          'w-full bg-transparent border-none border-b-2 px-0 py-3',
+          'text-body text-brand-black placeholder:text-brand-grayMid',
+          'focus:outline-none focus:ring-0 transition-colors duration-fast',
+          'tabular-nums',
+          disabled ? 'opacity-40 cursor-not-allowed' : '',
           hasError
-            ? 'border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500'
+            ? 'border-b-red-600'
             : validation.valid
-              ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
-              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500',
-          'focus:ring-2 focus:ring-opacity-20 focus:outline-none',
+              ? 'border-b-brand-black'
+              : 'border-b-brand-gray focus:border-b-brand-black',
         ].join(' ')}
         aria-invalid={hasError ? 'true' : 'false'}
         aria-describedby={error ? 'phone-error' : undefined}
       />
       {error && (
-        <p id="phone-error" className="mt-1 text-sm text-red-600" role="alert">
+        <p id="phone-error" className="mt-1.5 text-caption text-red-600" role="alert">
           {error}
         </p>
       )}
-      {!error && showHint && <p className="mt-1 text-sm text-amber-600">{validation.error}</p>}
+      {!error && showHint && <p className="mt-1.5 text-caption text-brand-grayMid">{validation.error}</p>}
       {!error && validation.valid && (
-        <p className="mt-1 text-sm text-green-600">✓ Telefone válido</p>
+        <p className="mt-1.5 text-caption text-brand-grayMid">Telefone válido</p>
       )}
     </div>
   );

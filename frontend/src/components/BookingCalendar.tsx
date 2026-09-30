@@ -89,7 +89,7 @@ export function BookingCalendar({
         <button
           onClick={() => goToWeek(-1)}
           disabled={isBefore(currentWeek, startOfWeek(new Date(), { weekStartsOn: 1 }))}
-          className="p-2 rounded-lg hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="p-2 text-brand-black hover:bg-brand-grayLight disabled:opacity-30 disabled:cursor-not-allowed transition-colors duration-fast"
           aria-label="Semana anterior"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -97,14 +97,14 @@ export function BookingCalendar({
           </svg>
         </button>
 
-        <h3 className="text-lg font-semibold text-gray-900">
-          {format(currentWeek, 'dd/MM', { locale: ptBR })} -{' '}
-          {format(endOfWeek(currentWeek, { weekStartsOn: 1 }), 'dd/MM/yyyy', { locale: ptBR })}
+        <h3 className="font-display font-semibold text-body tracking-tight">
+          {format(currentWeek, "dd 'de' MMMM", { locale: ptBR })} —{' '}
+          {format(endOfWeek(currentWeek, { weekStartsOn: 1 }), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
         </h3>
 
         <button
           onClick={() => goToWeek(1)}
-          className="p-2 rounded-lg hover:bg-gray-100"
+          className="p-2 text-brand-black hover:bg-brand-grayLight transition-colors duration-fast"
           aria-label="Próxima semana"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -131,52 +131,45 @@ export function BookingCalendar({
               }}
               disabled={disabled}
               className={`
-                relative p-3 rounded-xl text-center transition-all
-                ${disabled 
-                  ? 'bg-gray-50 text-gray-300 cursor-not-allowed' 
+                relative py-3 text-center border transition-colors duration-fast
+                ${disabled
+                  ? 'bg-brand-grayLight text-brand-grayMid cursor-not-allowed border-brand-gray'
                   : isSelected
-                    ? 'bg-blue-50 border-2 border-blue-500'
+                    ? 'bg-brand-black text-brand-white border-brand-black'
                     : blocked
-                      ? 'bg-red-50 border border-red-200'
-                      : 'bg-white hover:bg-gray-50 border border-gray-100'
+                      ? 'bg-brand-grayLight text-brand-grayMid border-brand-gray'
+                      : 'bg-brand-white text-brand-black border-brand-gray hover:border-brand-black'
                 }
-                ${isTodayDay && !disabled ? 'ring-2 ring-blue-200' : ''}
               `}
               aria-selected={isSelected}
               aria-disabled={disabled}
               aria-label={format(day, "EEEE, dd 'de' MMMM", { locale: ptBR })}
             >
               <span className={`
-                block text-sm font-medium
-                ${isTodayDay && !disabled ? 'text-blue-600' : 'text-gray-700'}
-                ${disabled ? 'text-gray-300' : ''}
-                ${blocked ? 'text-red-600' : ''}
+                block text-caption
+                ${isTodayDay && !disabled ? 'opacity-60' : 'opacity-60'}
+                ${isSelected && !disabled ? 'opacity-80' : ''}
               `}>
                 {format(day, 'EEEEEE', { locale: ptBR })}
               </span>
               <span className={`
-                block text-2xl font-bold mt-1
-                ${isTodayDay && !disabled ? 'text-blue-600' : 'text-gray-900'}
-                ${disabled ? 'text-gray-300' : ''}
-                ${blocked ? 'text-red-600' : ''}
+                block font-display font-bold text-body-lg mt-1
+                ${disabled ? 'opacity-40' : ''}
+                ${isSelected && !disabled ? 'text-brand-white' : ''}
               `}>
                 {format(day, 'dd')}
               </span>
-              
+
               {dayLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/80 rounded-xl">
-                  <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <div className="absolute inset-0 flex items-center justify-center bg-brand-white/80">
+                  <div className="w-4 h-4 border-2 border-brand-black border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
-              
+
               {!dayLoading && !disabled && availableCount > 0 && !blocked && (
-                <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">
+                <span className="absolute -top-1 -right-1 bg-brand-black text-brand-white text-caption w-5 h-5 flex items-center justify-center">
                   {availableCount > 9 ? '9+' : availableCount}
                 </span>
-              )}
-
-              {blocked && !dayLoading && (
-                <div className="absolute inset-0 bg-red-500/10 rounded-xl" />
               )}
             </button>
           );
@@ -191,17 +184,17 @@ export function BookingCalendar({
         const isActiveSelected = Boolean(selectedSlot && isSameDay(selectedSlot.start, activeDate));
 
         return (
-          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 animate-fade-in">
-            <h4 className="font-medium text-gray-900 mb-3">
-              Horários disponíveis para {format(activeDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+          <div className="border border-brand-gray bg-brand-grayLight p-4 animate-fade-in">
+            <h4 className="font-display font-medium text-body-sm mb-3">
+              Horários para {format(activeDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
             </h4>
 
             {isActiveLoading ? (
               <div className="flex items-center justify-center py-6">
-                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                <div className="w-5 h-5 border-2 border-brand-black border-t-transparent rounded-full animate-spin" />
               </div>
             ) : available.length === 0 ? (
-              <p className="text-gray-500 text-center py-4">Nenhum horário disponível neste dia.</p>
+              <p className="text-body-sm text-brand-grayMid text-center py-4">Nenhum horário disponível neste dia.</p>
             ) : (
               <div
                 className="grid grid-cols-3 sm:grid-cols-4 gap-2"
@@ -216,10 +209,10 @@ export function BookingCalendar({
                       type="button"
                       onClick={() => onSelectSlot(slot)}
                       className={[
-                        'py-2 px-3 rounded-lg text-sm font-medium transition-all',
+                        'py-2.5 px-3 font-display text-body-sm font-medium transition-colors duration-fast border',
                         active
-                          ? 'bg-blue-600 text-white shadow-sm'
-                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200',
+                          ? 'bg-brand-black text-brand-white border-brand-black'
+                          : 'bg-brand-white text-brand-black border-brand-gray hover:border-brand-black',
                       ].join(' ')}
                       role="option"
                       aria-selected={active}
@@ -235,7 +228,7 @@ export function BookingCalendar({
       })()}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm" role="alert">
+        <div className="border border-red-300 bg-red-50 text-red-700 px-4 py-3 text-body-sm" role="alert">
           {error}
         </div>
       )}

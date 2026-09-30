@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { employeeApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
-import { formatDateTime, formatDate, formatTime } from '@utils/date';
+import { formatTodayLong, formatTime } from '@utils/date';
 import type { Appointment } from '@types';
 
 const STATUS_LABELS: Record<string, string> = {
@@ -68,14 +68,12 @@ export function EmployeeSchedulePage() {
     );
   }
 
-  const now = new Date();
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Minha Agenda</h1>
-          <p className="text-gray-600">{formatDate(now, 'pt-BR')}</p>
+          <p className="text-gray-600">{formatTodayLong()}</p>
         </div>
       </div>
 

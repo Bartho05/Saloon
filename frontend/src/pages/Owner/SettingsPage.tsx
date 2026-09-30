@@ -3,7 +3,7 @@ import { ownerApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { PhoneInput } from '@components/PhoneInput';
 
-export function SettingsPage() {
+export function OwnerSettingsPage() {
   const { showToast } = useToast();
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -28,7 +28,12 @@ export function SettingsPage() {
     5: { open: '09:00', close: '19:00' },
     6: { open: '09:00', close: '17:00' },
   });
-  const [whatsappConfig, setWhatsappConfig] = useState({
+  const [whatsappConfig, setWhatsappConfig] = useState<{
+    provider: 'zapi' | 'evolution' | 'meta';
+    instanceId: string;
+    token: string;
+    apiUrl: string;
+  }>({
     provider: 'zapi',
     instanceId: '',
     token: '',
@@ -132,7 +137,7 @@ export function SettingsPage() {
 
   const handleRunBirthdayJob = async () => {
     try {
-      await (await import('@services/cronService')).runBirthdayJobNow();
+      await ownerApi.runBirthdayJob();
       showToast({ type: 'success', title: 'Job executado', message: 'Verifique os logs do servidor' });
     } catch (err: any) {
       showToast({ type: 'error', title: 'Erro', message: err.message });
@@ -305,7 +310,7 @@ export function SettingsPage() {
                         }))}
                         className="px-3 py-2 border border-gray-300 rounded-lg"
                       />
-                    </div>}
+                    </div>)}
                 </div>
               );
             })}
@@ -402,8 +407,8 @@ export function SettingsPage() {
           <h2 className="text-lg font-semibold text-gray-900">Mensagem de Aniversário</h2>
           <p className="text-gray-600">
             Configure a mensagem automática enviada no aniversário dos clientes via WhatsApp.
-            Use <code className="bg-gray-100 px-1 rounded">{nome}</code> para o nome do cliente e 
-            <code className="bg-gray-100 px-1 rounded">{salao}</code> para o nome do salão.
+            Use <code className="bg-gray-100 px-1 rounded">{'{nome}'}</code> para o nome do cliente e{' '}
+            <code className="bg-gray-100 px-1 rounded">{'{salao}'}</code> para o nome do salão.
           </p>
 
           <div>

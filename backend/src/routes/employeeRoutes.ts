@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as appointmentController from '@controllers/appointmentController';
-import { employeeMiddleware } from '@middlewares/auth';
+import * as employeeController from '@controllers/employeeController';
+import { authMiddleware, employeeMiddleware } from '@middlewares/auth';
 import { uuidParamSchema, updateAppointmentStatusSchema, listAppointmentsSchema } from '@utils/validation';
 import { validateParams, validateBody, validateQuery } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
@@ -8,10 +9,10 @@ import { asyncHandler } from '@middlewares/errorHandler';
 const router = Router();
 
 // Todas as rotas requerem autenticação de funcionário ou dono
-router.use(employeeMiddleware);
+router.use(authMiddleware, employeeMiddleware);
 
 // Perfil do funcionário
-router.get('/profile', asyncHandler(appointmentController.getEmployeeProfile));
+router.get('/profile', asyncHandler(employeeController.getEmployeeProfile));
 
 // Agendamentos do funcionário
 router.get('/appointments', validateQuery(listAppointmentsSchema), asyncHandler(appointmentController.getEmployeeAppointments));

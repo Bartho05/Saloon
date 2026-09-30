@@ -26,7 +26,7 @@ const verificationCodes = new Map<string, { code: string; expiresAt: Date }>();
 export async function ownerLogin(req: Request, res: Response): Promise<void> {
   const { email, password } = req.body;
 
-  const owner = await prisma.user.findUnique({
+  const owner = await prisma.user.findFirst({
     where: { email, role: 'OWNER', isActive: true },
   });
 
@@ -62,13 +62,13 @@ export async function ownerLogin(req: Request, res: Response): Promise<void> {
  * Login do funcionário com código de acesso
  */
 export async function employeeLogin(req: Request, res: Response): Promise<void> {
-  const { accessCode } = req.body;
+  const accessCode = String(req.body.accessCode ?? '').trim();
 
-  const employee = await prisma.user.findUnique({
-    where: { accessCode, isActive: true },
+  const employee = await prisma.user.findFirst({
+    where: { accessCode, role: 'EMPLOYEE', isActive: true },
   });
 
-  if (!employee || employee.role === 'OWNER') {
+  if (!employee) {
     throw new AppError('Código de acesso inválido', 401, 'INVALID_ACCESS_CODE');
   }
 
@@ -97,33 +97,28 @@ export async function employeeLogin(req: Request, res: Response): Promise<void> 
  */
 export async function clientRequestCode(req: Request, res: Response): Promise<void> {
   const { phone } = req.body;
-
-  // Verifica se cliente existe
-  let client = await prisma.client.findUnique({
-    where: { phone },
-  });
-
-  // Se não existe, cria registro temporário (será completado no agendamento)
-  if (!client) {
-    // Gera código mesmo assim para permitir agendamento direto
-    // O cadastro completo acontece no fluxo de agendamento
-  }
+  const isDev = process.env.NODE_ENV !== 'production';
 
   const code = generateVerificationCode();
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
 
   verificationCodes.set(phone, { code, expiresAt });
 
-  // Envia por WhatsApp
+  // Envia por WhatsApp (imprime no terminal se não estiver configurado)
   const sent = await sendVerificationCode({ phone, code });
 
-  if (!sent) {
-    // Em desenvolvimento, retorna código no response para teste
-    if (process.env.NODE_ENV === 'development') {
-      res.json({ sent: true, code, message: 'Código enviado (modo dev)' });
-      return;
-    }
-    throw new AppError('Falha ao enviar código. Verifique configuração do WhatsApp.', 500, 'WHATSAPP_ERROR');
+  if (!sent && !isDev) {
+    throw new AppError(
+      'Falha ao enviar código. Verifique a configuração do WhatsApp.',
+      500,
+      'WHATSAPP_ERROR'
+    );
+  }
+
+  if (isDev) {
+    // Em desenvolvimento o código volta na resposta para facilitar os testes
+    res.json({ sent, code, message: 'Código enviado (modo desenvolvimento)' });
+    return;
   }
 
   res.json({ sent: true, message: 'Código enviado via WhatsApp' });
@@ -203,7 +198,7 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
 
   // Verifica se usuário/cliente ainda existe e está ativo
   if (payload.role === 'OWNER' || payload.role === 'EMPLOYEE') {
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { id: payload.sub, isActive: true },
     });
     if (!user) {

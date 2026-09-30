@@ -69,7 +69,7 @@ export function useRequireAuth(allowedRoles: ('OWNER' | 'EMPLOYEE' | 'CLIENT')[]
 
   useEffect(() => {
     if (!loading) {
-      setAuthorized(isAuthenticated && role && allowedRoles.includes(role));
+      setAuthorized(Boolean(isAuthenticated && role && allowedRoles.includes(role)));
     }
   }, [isAuthenticated, role, loading, allowedRoles]);
 

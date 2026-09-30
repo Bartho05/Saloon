@@ -6,7 +6,7 @@ import { bookingRateLimiter } from '@middlewares/rateLimiter';
 import {
   getSlotsSchema,
   createBookingSchema,
-  cancelBookingSchema,
+  checkClientSchema,
 } from '@utils/validation';
 import { validateQuery, validateBody, validateParams } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
@@ -24,7 +24,7 @@ router.get('/employees/active', asyncHandler(employeeController.getActiveEmploye
 router.post(
   '/booking/check-client',
   bookingRateLimiter,
-  validateBody(cancelBookingSchema.shape.body), // reaproveita schema de phone
+  validateBody(checkClientSchema),
   asyncHandler(bookingController.checkClient)
 );
 

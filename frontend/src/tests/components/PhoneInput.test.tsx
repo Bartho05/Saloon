@@ -11,7 +11,7 @@ describe('PhoneInput', () => {
     const onChange = vi.fn();
     render(<PhoneInput value="" onChange={onChange} />);
     
-    const input = screen.getByPlaceholderText('(11) 99999-9999');
+    const input = screen.getByPlaceholderText(/\(\d{2}\)/) as HTMLInputElement;
     fireEvent.change(input, { target: { value: '11999999999' } });
     
     expect(input.value).toBe('(11) 99999-9999');
@@ -27,7 +27,7 @@ describe('PhoneInput', () => {
     const onChange = vi.fn();
     render(<PhoneInput value="" onChange={onChange} />);
     
-    const input = screen.getByPlaceholderText('(11) 99999-9999');
+    const input = screen.getByPlaceholderText(/\(\d{2}\)/);
     fireEvent.change(input, { target: { value: '1133334444' } });
     fireEvent.blur(input);
     
@@ -43,7 +43,7 @@ describe('PhoneInput', () => {
     const onEnterPress = vi.fn();
     render(<PhoneInput value="(11) 99999-9999" onChange={vi.fn()} onEnterPress={onEnterPress} />);
     
-    const input = screen.getByPlaceholderText('(11) 99999-9999');
+    const input = screen.getByPlaceholderText(/\(\d{2}\)/);
     fireEvent.keyDown(input, { key: 'Enter' });
     
     expect(onEnterPress).toHaveBeenCalled();

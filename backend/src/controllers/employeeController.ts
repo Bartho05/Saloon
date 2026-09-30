@@ -81,7 +81,7 @@ export async function getActiveEmployees(req: AuthRequest, res: Response): Promi
  * Cria funcionário (owner)
  */
 export async function createEmployee(req: AuthRequest, res: Response): Promise<void> {
-  const { name, phone, specialties, serviceIds } = req.body;
+  const { name, phone, specialties } = req.body;
 
   // Verifica se telefone já existe
   const existingPhone = await prisma.user.findUnique({ where: { phone } });
@@ -109,18 +109,7 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
     },
   });
 
-  // Associa serviços se fornecidos
-  if (serviceIds && serviceIds.length > 0) {
-    // Verifica se serviços existem
-    const services = await prisma.service.findMany({
-      where: { id: { in: serviceIds } },
-      select: { id: true },
-    });
-
-    // Cria relacionamento via agendamentos futuros não é necessário
-    // Serviços que o funcionário realiza ficam no campo specialties
-    // Ou podemos criar tabela many-to-many se necessário
-  }
+  // Os serviços que o funcionário realiza ficam no campo `specialties`.
 
   // Envia código por WhatsApp (se configurado)
   const settings = await prisma.salonSettings.findUnique({
@@ -273,12 +262,14 @@ export async function deleteEmployee(req: AuthRequest, res: Response): Promise<v
  * Perfil do funcionário logado
  */
 export async function getEmployeeProfile(req: AuthRequest, res: Response): Promise<void> {
-  if (!req.userEntity || req.userEntity.role === 'OWNER') {
+  const entity = req.userEntity;
+
+  if (!entity || !('role' in entity) || entity.role === 'OWNER') {
     throw new AppError('Acesso restrito a funcionários', 403, 'FORBIDDEN');
   }
 
   const employee = await prisma.user.findUnique({
-    where: { id: req.userEntity.id },
+    where: { id: entity.id },
     select: {
       id: true,
       name: true,

@@ -174,7 +174,7 @@ export async function updateAppointmentStatusController(req: AuthRequest, res: R
   const { id } = req.params;
   const { status, notes } = req.body;
   const userId = req.userEntity!.id;
-  const userRole = req.userEntity!.role;
+  const userRole = 'role' in req.userEntity! ? req.userEntity!.role : 'OWNER';
 
   // Verifica se agendamento existe
   const appointment = await prisma.appointment.findUnique({

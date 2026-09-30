@@ -1,7 +1,9 @@
 import cron from 'node-cron';
 import prisma from '@config/database';
-import { sendBirthdayMessage } from './whatsappService';
-import { format } from 'date-fns-tz';
+import { sendBirthdayMessage, sendAppointmentReminder } from './whatsappService';
+import { formatInTimeZone } from 'date-fns-tz';
+
+const TIMEZONE = 'America/Sao_Paulo';
 
 let birthdayJob: cron.ScheduledTask | null = null;
 let reminderJob: cron.ScheduledTask | null = null;
@@ -13,20 +15,24 @@ export function startCronJobs(): void {
   if (process.env.NODE_ENV === 'test') return;
 
   // Job de aniversários - roda todo dia às 09:00
-  birthdayJob = cron.schedule('0 9 * * *', async () => {
-    console.log('🎂 Executando job de aniversários...');
-    await processBirthdays();
-  }, {
-    timezone: 'America/Sao_Paulo',
-  });
+  birthdayJob = cron.schedule(
+    '0 9 * * *',
+    async () => {
+      console.log('🎂 Executando job de aniversários...');
+      await processBirthdays();
+    },
+    { timezone: TIMEZONE }
+  );
 
   // Job de lembretes - roda todo dia às 10:00 (para agendamentos de amanhã)
-  reminderJob = cron.schedule('0 10 * * *', async () => {
-    console.log('⏰ Executando job de lembretes...');
-    await processReminders();
-  }, {
-    timezone: 'America/Sao_Paulo',
-  });
+  reminderJob = cron.schedule(
+    '0 10 * * *',
+    async () => {
+      console.log('⏰ Executando job de lembretes...');
+      await processReminders();
+    },
+    { timezone: TIMEZONE }
+  );
 
   console.log('✅ Jobs agendados iniciados');
 }
@@ -42,16 +48,49 @@ export function stopCronJobs(): void {
   console.log('🛑 Jobs agendados parados');
 }
 
+/** Intervalo [início, fim) do dia de `date` no fuso do salão */
+function dayRange(date: Date): { start: Date; end: Date } {
+  const day = formatInTimeZone(date, TIMEZONE, 'yyyy-MM-dd');
+  const start = new Date(`${day}T00:00:00.000-03:00`);
+  const end = new Date(`${day}T23:59:59.999-03:00`);
+  return { start, end };
+}
+
+/** Clientes que fazem aniversário no dia (mês/dia no fuso do salão) */
+function isBirthdayToday(birthDate: Date, reference: Date): boolean {
+  return (
+    formatInTimeZone(birthDate, TIMEZONE, 'MM-dd') ===
+    formatInTimeZone(reference, TIMEZONE, 'MM-dd')
+  );
+}
+
+async function findBirthdayClients(reference: Date) {
+  const clients = await prisma.client.findMany({
+    select: { id: true, fullName: true, phone: true, birthDate: true },
+  });
+  return clients.filter((client) => isBirthdayToday(client.birthDate, reference));
+}
+
+async function findTomorrowAppointments(reference: Date) {
+  const tomorrow = new Date(reference);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const { start, end } = dayRange(tomorrow);
+
+  return prisma.appointment.findMany({
+    where: { startsAt: { gte: start, lte: end }, status: 'SCHEDULED' },
+    include: {
+      client: { select: { fullName: true, phone: true } },
+      service: { select: { name: true } },
+      employee: { select: { name: true } },
+    },
+  });
+}
+
 /**
  * Processa aniversários do dia
  */
 async function processBirthdays(): Promise<void> {
   try {
-    const today = new Date();
-    const month = today.getMonth() + 1;
-    const day = today.getDate();
-
-    // Busca configurações do salão
     const settings = await prisma.salonSettings.findUnique({
       where: { id: 1 },
       select: { name: true, birthdayMessage: true },
@@ -62,21 +101,7 @@ async function processBirthdays(): Promise<void> {
       return;
     }
 
-    // Busca clientes aniversariantes
-    const clients = await prisma.client.findMany({
-      where: {
-        birthDate: {
-          // Prisma não suporta query direta de mês/dia, filtramos em memória
-        },
-      },
-      select: { id: true, fullName: true, phone: true, birthDate: true },
-    });
-
-    // Filtra aniversariantes de hoje
-    const birthdayClients = clients.filter((client) => {
-      const birthDate = new Date(client.birthDate);
-      return birthDate.getMonth() + 1 === month && birthDate.getDate() === day;
-    });
+    const birthdayClients = await findBirthdayClients(new Date());
 
     if (birthdayClients.length === 0) {
       console.log('🎂 Nenhum aniversariante hoje');
@@ -85,7 +110,6 @@ async function processBirthdays(): Promise<void> {
 
     console.log(`🎂 Enviando mensagens para ${birthdayClients.length} aniversariante(s)`);
 
-    // Envia mensagens em paralelo (com limite)
     const results = await Promise.allSettled(
       birthdayClients.map((client) =>
         sendBirthdayMessage({
@@ -97,10 +121,8 @@ async function processBirthdays(): Promise<void> {
       )
     );
 
-    const successful = results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
-    const failed = results.length - successful;
-
-    console.log(`🎂 Aniversários: ${successful} enviados, ${failed} falharam`);
+    const sent = results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
+    console.log(`🎂 Aniversários: ${sent} enviados, ${results.length - sent} falharam`);
   } catch (error) {
     console.error('❌ Erro no job de aniversários:', error);
   }
@@ -111,27 +133,7 @@ async function processBirthdays(): Promise<void> {
  */
 async function processReminders(): Promise<void> {
   try {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    const dayStart = new Date(tomorrow);
-    dayStart.setHours(0, 0, 0, 0);
-
-    const dayEnd = new Date(tomorrow);
-    dayEnd.setHours(23, 59, 59, 999);
-
-    // Busca agendamentos de amanhã
-    const appointments = await prisma.appointment.findMany({
-      where: {
-        startsAt: { gte: dayStart, lte: dayEnd },
-        status: 'SCHEDULED',
-      },
-      include: {
-        client: { select: { fullName: true, phone: true } },
-        service: { select: { name: true } },
-        employee: { select: { name: true } },
-      },
-    });
+    const appointments = await findTomorrowAppointments(new Date());
 
     if (appointments.length === 0) {
       console.log('⏰ Nenhum lembrete para enviar');
@@ -149,24 +151,19 @@ async function processReminders(): Promise<void> {
 
     const results = await Promise.allSettled(
       appointments.map((apt) =>
-        sendWhatsAppMessage({
-          phone: apt.client.phone,
-          message: `⏰ *Lembrete de Agendamento*\n\n` +
-            `Olá ${apt.client.fullName}!\n\n` +
-            `Seu agendamento é amanhã:\n` +
-            `📅 ${format(apt.startsAt, 'dd/MM/yyyy HH:mm', { timeZone: 'America/Sao_Paulo' })}\n` +
-            `✂️ ${apt.service.name}\n` +
-            `👤 ${apt.employee.name}\n` +
-            `🏢 ${settings.name}\n\n` +
-            `Nos vemos lá!`,
+        sendAppointmentReminder({
+          clientName: apt.client.fullName,
+          clientPhone: apt.client.phone,
+          serviceName: apt.service.name,
+          employeeName: apt.employee.name,
+          dateTime: formatInTimeZone(apt.startsAt, TIMEZONE, "dd/MM/yyyy 'às' HH:mm"),
+          salonName: settings.name,
         })
       )
     );
 
-    const successful = results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
-    const failed = results.length - successful;
-
-    console.log(`⏰ Lembretes: ${successful} enviados, ${failed} falharam`);
+    const sent = results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
+    console.log(`⏰ Lembretes: ${sent} enviados, ${results.length - sent} falharam`);
   } catch (error) {
     console.error('❌ Erro no job de lembretes:', error);
   }
@@ -176,27 +173,14 @@ async function processReminders(): Promise<void> {
  * Executa job de aniversários manualmente (para teste)
  */
 export async function runBirthdayJobNow(): Promise<{ sent: number; failed: number }> {
-  const today = new Date();
-  const month = today.getMonth() + 1;
-  const day = today.getDate();
-
   const settings = await prisma.salonSettings.findUnique({
     where: { id: 1 },
     select: { name: true, birthdayMessage: true },
   });
 
-  if (!settings) {
-    return { sent: 0, failed: 0 };
-  }
+  if (!settings) return { sent: 0, failed: 0 };
 
-  const clients = await prisma.client.findMany({
-    select: { id: true, fullName: true, phone: true, birthDate: true },
-  });
-
-  const birthdayClients = clients.filter((client) => {
-    const birthDate = new Date(client.birthDate);
-    return birthDate.getMonth() + 1 === month && birthDate.getDate() === day;
-  });
+  const birthdayClients = await findBirthdayClients(new Date());
 
   const results = await Promise.allSettled(
     birthdayClients.map((client) =>
@@ -210,36 +194,13 @@ export async function runBirthdayJobNow(): Promise<{ sent: number; failed: numbe
   );
 
   const sent = results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
-  const failed = results.length - sent;
-
-  return { sent, failed };
+  return { sent, failed: results.length - sent };
 }
 
 /**
  * Executa job de lembretes manualmente (para teste)
  */
 export async function runReminderJobNow(): Promise<{ sent: number; failed: number }> {
-  const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
-
-  const dayStart = new Date(tomorrow);
-  dayStart.setHours(0, 0, 0, 0);
-
-  const dayEnd = new Date(tomorrow);
-  dayEnd.setHours(23, 59, 59, 999);
-
-  const appointments = await prisma.appointment.findMany({
-    where: {
-      startsAt: { gte: dayStart, lte: dayEnd },
-      status: 'SCHEDULED',
-    },
-    include: {
-      client: { select: { fullName: true, phone: true } },
-      service: { select: { name: true } },
-      employee: { select: { name: true } },
-    },
-  });
-
   const settings = await prisma.salonSettings.findUnique({
     where: { id: 1 },
     select: { name: true },
@@ -247,24 +208,21 @@ export async function runReminderJobNow(): Promise<{ sent: number; failed: numbe
 
   if (!settings) return { sent: 0, failed: 0 };
 
+  const appointments = await findTomorrowAppointments(new Date());
+
   const results = await Promise.allSettled(
     appointments.map((apt) =>
-      sendWhatsAppMessage({
-        phone: apt.client.phone,
-        message: `⏰ *Lembrete de Agendamento*\n\n` +
-          `Olá ${apt.client.fullName}!\n\n` +
-          `Seu agendamento é amanhã:\n` +
-          `📅 ${format(apt.startsAt, 'dd/MM/yyyy HH:mm', { timeZone: 'America/Sao_Paulo' })}\n` +
-          `✂️ ${apt.service.name}\n` +
-          `👤 ${apt.employee.name}\n` +
-          `🏢 ${settings.name}\n\n` +
-          `Nos vemos lá!`,
+      sendAppointmentReminder({
+        clientName: apt.client.fullName,
+        clientPhone: apt.client.phone,
+        serviceName: apt.service.name,
+        employeeName: apt.employee.name,
+        dateTime: formatInTimeZone(apt.startsAt, TIMEZONE, "dd/MM/yyyy 'às' HH:mm"),
+        salonName: settings.name,
       })
     )
   );
 
   const sent = results.filter((r) => r.status === 'fulfilled' && r.value === true).length;
-  const failed = results.length - sent;
-
-  return { sent, failed };
+  return { sent, failed: results.length - sent };
 }

@@ -4,7 +4,7 @@ import { useToast } from '@contexts/ToastContext';
 import { formatCurrency } from '@utils/date';
 import type { Service } from '@types';
 
-export function ServicesPage() {
+export function OwnerServicesPage() {
   const { showToast } = useToast();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);

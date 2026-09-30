@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'react';
-import { ownerApi, employeesApi, servicesApi } from '@services/api';
+import { ownerApi, employeesApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
-import { formatDateTime, formatDate, formatTime } from '@utils/date';
-import type { Appointment, Employee, Service } from '@types';
+import { formatDateTime } from '@utils/date';
+import type { Appointment, Employee } from '@types';
 
 export function OwnerSchedulePage() {
   const { showToast } = useToast();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
     status: '',
@@ -28,12 +27,8 @@ export function OwnerSchedulePage() {
 
   const loadData = async () => {
     try {
-      const [empRes, svcRes] = await Promise.all([
-        employeesApi.getActive(),
-        servicesApi.getAll(),
-      ]);
+      const empRes = await employeesApi.getActive();
       setEmployees(empRes.employees);
-      setServices(svcRes.services);
     } catch (err: any) {
       showToast({ type: 'error', title: 'Erro', message: err.message });
     }

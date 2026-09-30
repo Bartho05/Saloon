@@ -12,7 +12,6 @@ export function BookingProgress({ currentStep, completedSteps }: BookingProgress
         {STEPS.map((step, index) => {
           const isCompleted = completedSteps.includes(index);
           const isCurrent = index === currentStep;
-          const isFuture = index > currentStep;
 
           return (
             <li key={step.key} className="flex items-center flex-1">

@@ -191,6 +191,10 @@ export const ownerApi = {
       method: 'POST',
       body: JSON.stringify({ phone }),
     }),
+  runBirthdayJob: () =>
+    request<{ sent: number; failed: number }>('/owner/settings/run-birthday-job', { method: 'POST' }),
+  runReminderJob: () =>
+    request<{ sent: number; failed: number }>('/owner/settings/run-reminder-job', { method: 'POST' }),
 };
 
 // Employee

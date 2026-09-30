@@ -1,7 +1,8 @@
-import { useState, useEffect, forwardRef, useImperativeHandle, useRef } from 'react';
-import { formatPhoneInput, validatePhoneInput } from '@utils/validation';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { formatPhoneInput, validatePhoneInput, onlyDigits } from '@utils/validation';
 
 interface PhoneInputProps {
+  /** Valor controlado: apenas dígitos (ex.: "31988976543") */
   value: string;
   onChange: (value: string) => void;
   error?: string;
@@ -11,112 +12,112 @@ interface PhoneInputProps {
   onEnterPress?: () => void;
 }
 
-export const PhoneInput = forwardRef<HTMLInputElement, PhoneInputProps>(
-  ({ value, onChange, error, label, required, disabled, onEnterPress }, ref) => {
-    const [displayValue, setDisplayValue] = useState(value);
-    const [validation, setValidation] = useState({ valid: false, error: '' });
-    const inputRef = useRef<HTMLInputElement>(null);
+export function PhoneInput({
+  value,
+  onChange,
+  error,
+  label,
+  required,
+  disabled,
+  onEnterPress,
+}: PhoneInputProps) {
+  const [displayValue, setDisplayValue] = useState(() => formatPhoneInput(value));
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Últimos dígitos enviados ao pai — evita que o effect apague a máscara
+  const lastEmitted = useRef<string>(onlyDigits(value));
 
-    useEffect(() => {
-      setDisplayValue(value);
-    }, [value]);
+  // Sincroniza apenas quando o pai envia um valor diferente do que emitimos
+  useEffect(() => {
+    const incoming = onlyDigits(value);
+    if (incoming !== lastEmitted.current) {
+      lastEmitted.current = incoming;
+      setDisplayValue(formatPhoneInput(incoming));
+    }
+  }, [value]);
 
-    useEffect(() => {
-      if (displayValue) {
-        const result = validatePhoneInput(displayValue);
-        setValidation(result);
-      } else {
-        setValidation({ valid: false, error: '' });
-      }
-    }, [displayValue]);
+  const validation = displayValue ? validatePhoneInput(displayValue) : { valid: false, error: '' };
 
-    const applyMask = (raw: string): string => {
-      return formatPhoneInput(raw);
-    };
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const formatted = applyMask(e.target.value);
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const digits = onlyDigits(e.target.value).slice(0, 11);
+      const formatted = formatPhoneInput(digits);
+      lastEmitted.current = digits;
       setDisplayValue(formatted);
-      
-      const numbers = formatted.replace(/\D/g, '');
-      onChange(numbers);
-    };
+      onChange(digits);
+    },
+    [onChange]
+  );
 
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === 'Enter' && onEnterPress && validation.valid) {
+  const handleBlur = useCallback(() => {
+    const digits = onlyDigits(displayValue);
+
+    // Telefone fixo de 10 dígitos (DDD + 8) → completa com o 9 para celular
+    if (digits.length === 10 && digits[2] !== '9') {
+      const withNine = digits.slice(0, 2) + '9' + digits.slice(2);
+      lastEmitted.current = withNine;
+      setDisplayValue(formatPhoneInput(withNine));
+      onChange(withNine);
+    }
+  }, [displayValue, onChange]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Enter') {
         e.preventDefault();
-        onEnterPress();
+        if (validation.valid && onEnterPress) onEnterPress();
       }
-    };
+    },
+    [validation.valid, onEnterPress]
+  );
 
-    const handleBlur = () => {
-      const numbers = displayValue.replace(/\D/g, '');
-      if (numbers.length === 10 && numbers[2] !== '9') {
-        const withNine = numbers.slice(0, 2) + '9' + numbers.slice(2);
-        const formatted = applyMask(withNine);
-        setDisplayValue(formatted);
-        onChange(withNine);
-      }
-    };
+  const hasError = Boolean(error) || (displayValue.length > 0 && !validation.valid);
+  const showHint = !error && displayValue.length > 0 && !validation.valid && validation.error;
 
-    useImperativeHandle(ref, () => ({
-      focus: () => inputRef.current?.focus(),
-      value: displayValue,
-    }));
+  return (
+    <div className="w-full">
+      {label && (
+        <label htmlFor="phone-input" className="block text-sm font-medium text-gray-700 mb-1">
+          {label} {required && <span className="text-red-500">*</span>}
+        </label>
+      )}
+      <input
+        id="phone-input"
+        ref={inputRef}
+        type="tel"
+        inputMode="numeric"
+        autoComplete="tel"
+        value={displayValue}
+        onChange={handleChange}
+        onBlur={handleBlur}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+        placeholder="(31) 98888-7777"
+        maxLength={16}
+        className={[
+          'w-full px-4 py-3 rounded-lg border transition-colors tabular-nums',
+          'placeholder:text-gray-400',
+          disabled ? 'bg-gray-100 cursor-not-allowed' : '',
+          hasError
+            ? 'border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500'
+            : validation.valid
+              ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
+              : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500',
+          'focus:ring-2 focus:ring-opacity-20 focus:outline-none',
+        ].join(' ')}
+        aria-invalid={hasError ? 'true' : 'false'}
+        aria-describedby={error ? 'phone-error' : undefined}
+      />
+      {error && (
+        <p id="phone-error" className="mt-1 text-sm text-red-600" role="alert">
+          {error}
+        </p>
+      )}
+      {!error && showHint && <p className="mt-1 text-sm text-amber-600">{validation.error}</p>}
+      {!error && validation.valid && (
+        <p className="mt-1 text-sm text-green-600">✓ Telefone válido</p>
+      )}
+    </div>
+  );
+}
 
-    const isComplete = displayValue.length >= 14; // (99) 99999-9999
-    const hasError = error || (!validation.valid && displayValue.length > 0);
-
-    return (
-      <div className="w-full">
-        {label && (
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            {label} {required && <span className="text-red-500">*</span>}
-          </label>
-        )}
-        <input
-          ref={inputRef}
-          type="tel"
-          value={displayValue}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-          disabled={disabled}
-          placeholder="(11) 99999-9999"
-          maxLength={15}
-          className={`
-            w-full px-4 py-3 rounded-lg border transition-colors
-            placeholder:text-gray-400 font-mono tabular-nums
-            ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}
-            ${hasError
-              ? 'border-red-300 text-red-900 focus:border-red-500 focus:ring-red-500'
-              : isComplete && validation.valid
-                ? 'border-green-300 focus:border-green-500 focus:ring-green-500'
-                : 'border-gray-300 focus:border-blue-500 focus:ring-blue-500'
-            }
-            focus:ring-2 focus:ring-opacity-20 focus:outline-none
-          `}
-          aria-invalid={hasError ? 'true' : 'false'}
-          aria-describedby={error ? 'phone-error' : undefined}
-        />
-        {error && (
-          <p id="phone-error" className="mt-1 text-sm text-red-600" role="alert">
-            {error}
-          </p>
-        )}
-        {!error && !validation.valid && displayValue.length > 0 && !isComplete && (
-          <p className="mt-1 text-sm text-amber-600">
-            {validation.error || 'Complete o número'}
-          </p>
-        )}
-        {isComplete && validation.valid && !error && (
-          <p className="mt-1 text-sm text-green-600">
-            ✓ Telefone válido
-          </p>
-        )}
-      </div>
-    );
-  }
-);
-
-PhoneInput.displayName = 'PhoneInput';
+export default PhoneInput;

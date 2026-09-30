@@ -31,6 +31,8 @@ model User {
   accessCode    String?   @unique
   role          UserRole  @default(EMPLOYEE)
   isActive      Boolean   @default(true)
+  specialties   String[]  @default([])
+  color         String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

@@ -20,31 +20,17 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    strictPort: false,
     proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/auth': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/owner': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/employee': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/client': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/health': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
+      '/api': { target: 'http://localhost:3000', changeOrigin: true },
+      '/auth': { target: 'http://localhost:3000', changeOrigin: true },
+      '/owner': { target: 'http://localhost:3000', changeOrigin: true },
+      '/employee': { target: 'http://localhost:3000', changeOrigin: true },
+      '/client': { target: 'http://localhost:3000', changeOrigin: true },
+      '/services': { target: 'http://localhost:3000', changeOrigin: true },
+      '/employees': { target: 'http://localhost:3000', changeOrigin: true },
+      '/booking': { target: 'http://localhost:3000', changeOrigin: true },
+      '/health': { target: 'http://localhost:3000', changeOrigin: true },
     },
   },
   build: {

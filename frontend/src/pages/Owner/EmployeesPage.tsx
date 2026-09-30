@@ -3,7 +3,7 @@ import { ownerApi, servicesApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import type { Employee, Service } from '@types';
 
-export function EmployeesPage() {
+export function OwnerEmployeesPage() {
   const { showToast } = useToast();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [services, setServices] = useState<Service[]>([]);

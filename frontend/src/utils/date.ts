@@ -1,4 +1,4 @@
-import { format, parseISO, startOfDay, endOfDay, addMinutes, isBefore, isAfter, isSameDay } from 'date-fns';
+import { format, parseISO, startOfDay, endOfDay, addMinutes, isBefore, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
 /**
@@ -137,6 +137,13 @@ export function formatCurrency(value: number): string {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+}
+
+/**
+ * Formata a data de hoje por extenso (quarta-feira, 29 de setembro de 2026)
+ */
+export function formatTodayLong(): string {
+  return format(new Date(), "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR });
 }
 
 /**

@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as bookingController from '@controllers/bookingController';
 import * as appointmentController from '@controllers/appointmentController';
-import { clientMiddleware } from '@middlewares/auth';
+import { authMiddleware, clientMiddleware } from '@middlewares/auth';
 import { uuidParamSchema, cancelBookingSchema, listAppointmentsSchema } from '@utils/validation';
 import { validateParams, validateBody, validateQuery } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
@@ -9,7 +9,7 @@ import { asyncHandler } from '@middlewares/errorHandler';
 const router = Router();
 
 // Todas as rotas requerem autenticação de cliente
-router.use(clientMiddleware);
+router.use(authMiddleware, clientMiddleware);
 
 // Meus agendamentos
 router.get('/appointments', validateQuery(listAppointmentsSchema), asyncHandler(bookingController.getClientAppointments));

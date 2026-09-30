@@ -22,7 +22,7 @@ export function fromSalonTimezone(date: Date): Date {
  * Formata data para exibição no timezone do salão
  */
 export function formatInTimezone(date: Date, pattern: string): string {
-  return format(toSalonTimezone(date), pattern, { timeZone: TIMEZONE });
+  return format(toSalonTimezone(date), pattern);
 }
 
 /**

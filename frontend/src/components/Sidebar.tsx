@@ -1,4 +1,4 @@
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '@hooks/useAuth';
 
 interface SidebarProps {
@@ -42,9 +42,10 @@ function UserIcon({ className }: { className?: string }) {
 }
 
 export function Sidebar({ variant }: SidebarProps) {
-  const location = useLocation();
-  const { user, isOwner, isEmployee, logout } = useAuth();
+  const { user, logout } = useAuth();
   const menu = variant === 'owner' ? ownerMenu : employeeMenu;
+  const displayName =
+    user && 'name' in user ? user.name : user && 'fullName' in user ? user.fullName : 'Usuário';
 
   return (
     <aside className="fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 lg:translate-x-0">
@@ -68,7 +69,7 @@ export function Sidebar({ variant }: SidebarProps) {
               </svg>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 truncate">{user?.name || 'Usuário'}</p>
+              <p className="text-sm font-medium text-gray-900 truncate">{displayName}</p>
               <p className="text-xs text-gray-500 capitalize">{variant === 'owner' ? 'Proprietário' : 'Funcionário'}</p>
             </div>
           </div>

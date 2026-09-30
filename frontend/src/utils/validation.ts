@@ -52,42 +52,47 @@ export const createBookingSchema = z.object({
   }),
 });
 
-// Format phone for display
+// Remove tudo que não for dígito
+export function onlyDigits(value: string): string {
+  return (value || '').replace(/\D/g, '');
+}
+
+// Máscara de telefone brasileiro: (00) 00000-0000 / (00) 0000-0000
 export function formatPhoneInput(value: string): string {
-  const numbers = value.replace(/\D/g, '').slice(0, 11);
-  let formatted = '';
-  
-  for (let i = 0; i < numbers.length; i++) {
-    if (i === 0) formatted += '(';
-    if (i === 2) formatted += ') ';
-    if (i === 7) formatted += '-';
-    formatted += numbers[i];
-  }
-  
-  return formatted;
+  const d = onlyDigits(value).slice(0, 11);
+
+  if (d.length === 0) return '';
+  if (d.length <= 2) return `(${d}`;
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+}
+
+// Formata um telefone (somente dígitos) para exibição
+export function formatPhone(phone: string): string {
+  return formatPhoneInput(phone);
 }
 
 // Validate phone input (for real-time validation)
 export function validatePhoneInput(value: string): { valid: boolean; error?: string } {
-  const numbers = value.replace(/\D/g, '');
-  
+  const numbers = onlyDigits(value);
+
   if (numbers.length === 0) {
     return { valid: false, error: 'Telefone é obrigatório' };
   }
-  
+
   if (numbers.length < 10) {
     return { valid: false, error: 'Telefone incompleto' };
   }
-  
+
   if (numbers.length > 11) {
     return { valid: false, error: 'Telefone muito longo' };
   }
-  
+
   const ddd = parseInt(numbers.substring(0, 2), 10);
   if (ddd < 11 || ddd > 99) {
     return { valid: false, error: 'DDD inválido' };
   }
-  
+
   if (numbers.length === 10 || numbers.length === 11) {
     return { valid: true };
   }

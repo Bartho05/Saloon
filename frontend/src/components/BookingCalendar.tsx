@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
-import { format, startOfWeek, endOfWeek, addDays, isSameDay, isBefore, isToday, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfWeek, endOfWeek, addDays, isSameDay, isBefore, isToday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { bookingApi } from '@services/api';
 import type { TimeSlot } from '@utils/schedule';
+import { parseSlots } from '@utils/schedule';
 
 interface BookingCalendarProps {
   employeeId: string;
@@ -16,7 +17,6 @@ interface BookingCalendarProps {
 export function BookingCalendar({ 
   employeeId, 
   serviceId, 
-  serviceDuration, 
   onSelectSlot, 
   selectedSlot,
   disabledDates = []
@@ -25,10 +25,10 @@ export function BookingCalendar({
   const [slots, setSlots] = useState<Record<string, TimeSlot[]>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
-  const [blockedDays, setBlockedDays] = useState<Set<number>>(new Set());
+  const [activeDate, setActiveDate] = useState<Date | null>(null);
 
-  const weekDays = useMemo(() => 
-    Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i)),
+  const weekDays = useMemo(
+    () => Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i)),
     [currentWeek]
   );
 
@@ -41,38 +41,21 @@ export function BookingCalendar({
     
     try {
       const res = await bookingApi.getSlots(employeeId, serviceId, key);
-      setSlots(prev => ({ ...prev, [key]: res.slots }));
-      
-      // Atualiza dias bloqueados do mês
-      if (res.blocked) {
-        // Dia inteiro bloqueado
-      }
-    } catch (err) {
+      // A API devolve ISO strings — converte para Date
+      setSlots(prev => ({ ...prev, [key]: parseSlots(res.slots) }));
+    } catch {
       setError('Não foi possível carregar horários. Tente novamente.');
     } finally {
       setLoading(prev => ({ ...prev, [key]: false }));
     }
   }, [employeeId, serviceId, slots, loading]);
 
-  // Pré-carrega semana atual
+  // Pré-carrega a semana atual
   useEffect(() => {
-    weekDays.forEach(fetchDaySlots);
-  }, [currentWeek, fetchDaySlots]);
-
-  // Carrega dias bloqueados do mês atual
-  useEffect(() => {
-    const year = currentWeek.getFullYear();
-    const month = currentWeek.getMonth();
-    
-    // Busca primeiro dia do mês para pegar configurações
-    const firstDay = startOfMonth(currentWeek);
-    const key = format(firstDay, 'yyyy-MM-dd');
-    
-    bookingApi.getSlots(employeeId, serviceId, key).then(res => {
-      // Se o mês todo está bloqueado (ex: férias), marca todos os dias
-      // Por enquanto, confiamos no backend para bloquear dias individuais
+    weekDays.forEach((day) => {
+      void fetchDaySlots(day);
     });
-  }, [currentWeek, employeeId, serviceId]);
+  }, [currentWeek, fetchDaySlots]);
 
   const goToWeek = (delta: number) => {
     setCurrentWeek(prev => addDays(prev, delta * 7));
@@ -134,13 +117,18 @@ export function BookingCalendar({
         {weekDays.map(day => {
           const key = format(day, 'yyyy-MM-dd');
           const { availableCount, dayLoading, disabled, blocked } = getDayStatus(day);
-          const isSelected = selectedSlot && isSameDay(selectedSlot.start, day);
+          const isSelected = Boolean(selectedSlot && isSameDay(selectedSlot.start, day));
           const isTodayDay = isToday(day);
 
           return (
             <button
               key={key}
-              onClick={() => !disabled && fetchDaySlots(day)}
+              role="gridcell"
+              onClick={() => {
+                if (disabled) return;
+                setActiveDate(day);
+                void fetchDaySlots(day);
+              }}
               disabled={disabled}
               className={`
                 relative p-3 rounded-xl text-center transition-all
@@ -195,39 +183,56 @@ export function BookingCalendar({
         })}
       </div>
 
-      {selectedSlot && (
-        <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 animate-fade-in">
-          <h4 className="font-medium text-gray-900 mb-3">
-            Horários disponíveis para {format(selectedSlot.start, "EEEE, dd 'de' MMMM", { locale: ptBR })}
-          </h4>
-          
-          {slots[format(selectedSlot.start, 'yyyy-MM-dd')]?.length === 0 ? (
-            <p className="text-gray-500 text-center py-4">Nenhum horário disponível neste dia.</p>
-          ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2" role="listbox" aria-label="Horários disponíveis">
-              {slots[format(selectedSlot.start, 'yyyy-MM-dd')]
-                .filter(s => s.available)
-                .map(slot => (
-                  <button
-                    key={slot.start.toISOString()}
-                    onClick={() => onSelectSlot(slot)}
-                    className={`
-                      py-2 px-3 rounded-lg text-sm font-medium transition-all
-                      ${isSameDay(slot.start, selectedSlot.start) && slot.start.getTime() === selectedSlot.start.getTime()
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
-                      }
-                    `}
-                    role="option"
-                    aria-selected={isSameDay(slot.start, selectedSlot.start) && slot.start.getTime() === selectedSlot.start.getTime()}
-                  >
-                    {format(slot.start, 'HH:mm')}
-                  </button>
-                ))}
-            </div>
-          )}
-        </div>
-      )}
+      {activeDate && (() => {
+        const activeKey = format(activeDate, 'yyyy-MM-dd');
+        const daySlots = slots[activeKey];
+        const isActiveLoading = Boolean(loading[activeKey]) && !daySlots;
+        const available = (daySlots ?? []).filter(s => s.available);
+        const isActiveSelected = Boolean(selectedSlot && isSameDay(selectedSlot.start, activeDate));
+
+        return (
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-100 animate-fade-in">
+            <h4 className="font-medium text-gray-900 mb-3">
+              Horários disponíveis para {format(activeDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
+            </h4>
+
+            {isActiveLoading ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : available.length === 0 ? (
+              <p className="text-gray-500 text-center py-4">Nenhum horário disponível neste dia.</p>
+            ) : (
+              <div
+                className="grid grid-cols-3 sm:grid-cols-4 gap-2"
+                role="listbox"
+                aria-label="Horários disponíveis"
+              >
+                {available.map((slot) => {
+                  const active = isActiveSelected && slot.start.getTime() === selectedSlot!.start.getTime();
+                  return (
+                    <button
+                      key={slot.start.toISOString()}
+                      type="button"
+                      onClick={() => onSelectSlot(slot)}
+                      className={[
+                        'py-2 px-3 rounded-lg text-sm font-medium transition-all',
+                        active
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200',
+                      ].join(' ')}
+                      role="option"
+                      aria-selected={active}
+                    >
+                      {format(slot.start, 'HH:mm')}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm" role="alert">

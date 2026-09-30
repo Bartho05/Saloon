@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react';
 import { employeeApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
-import { useAuth } from '@hooks/useAuth';
 
 export function EmployeeProfilePage() {
   const { showToast } = useToast();
-  const { user } = useAuth();
   const [profile, setProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);

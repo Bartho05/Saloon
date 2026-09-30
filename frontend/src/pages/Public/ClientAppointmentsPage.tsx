@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { clientApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
-import { formatDateTime, formatDate, formatPhone } from '@utils/date';
+import { formatDateTime } from '@utils/date';
 import type { Appointment } from '@types';
 
 const STATUS_LABELS: Record<string, string> = {

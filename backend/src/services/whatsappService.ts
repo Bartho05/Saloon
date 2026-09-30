@@ -49,17 +49,37 @@ export function generateVerificationCode(): string {
 
 /**
  * Envia código de verificação por WhatsApp
+ *
+ * Sempre imprime o código no terminal (útil para desenvolvimento e
+ * quando a integração com o WhatsApp não está configurada).
  */
 export async function sendVerificationCode(data: VerificationCodeData): Promise<boolean> {
+  const isDev = process.env.NODE_ENV !== 'production';
   const config = await getWhatsAppConfig();
+
   if (!config) {
-    console.warn('⚠️ WhatsApp não configurado. Código não enviado:', data.phone);
+    console.log('\n══════════════════════════════════════════════');
+    console.log('  📱 CÓDIGO DE VERIFICAÇÃO (WhatsApp não configurado)');
+    console.log('  Telefone: ' + data.phone);
+    console.log('  Código:   ' + data.code);
+    console.log('  Expira em 10 minutos');
+    console.log('══════════════════════════════════════════════\n');
     return false;
   }
 
   const message = `Seu código de verificação é: ${data.code}\n\nEste código expira em 10 minutos. Não compartilhe com ninguém.`;
+  const sent = await sendWhatsAppMessage({ phone: data.phone, message });
 
-  return sendWhatsAppMessage({ phone: data.phone, message });
+  if (isDev || !sent) {
+    console.log('\n══════════════════════════════════════════════');
+    console.log('  📱 CÓDIGO DE VERIFICAÇÃO');
+    console.log('  Telefone: ' + data.phone);
+    console.log('  Código:   ' + data.code);
+    console.log('  Enviado via WhatsApp: ' + (sent ? 'SIM' : 'NÃO'));
+    console.log('══════════════════════════════════════════════\n');
+  }
+
+  return sent;
 }
 
 /**

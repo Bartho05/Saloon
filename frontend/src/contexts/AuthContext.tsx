@@ -1,11 +1,13 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { authApi } from '@services/api';
-import type { AuthState, User, Client } from '@types';
+import type { AuthState } from '@types';
 
 interface AuthContextType extends AuthState {
+  /** true enquanto os tokens do localStorage estão sendo validados */
+  loading: boolean;
   loginOwner: (email: string, password: string) => Promise<void>;
   loginEmployee: (accessCode: string) => Promise<void>;
-  requestClientCode: (phone: string) => Promise<void>;
+  requestClientCode: (phone: string) => Promise<string | null>;
   verifyClientCode: (phone: string, code: string) => Promise<void>;
   logout: () => void;
   refreshAuth: () => Promise<void>;
@@ -103,7 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const requestClientCode = async (phone: string) => {
-    await authApi.clientRequestCode(phone);
+    const res = await authApi.clientRequestCode(phone);
+    // Em dev, retorna o código para exibir na tela
+    return res.code || null;
   };
 
   const verifyClientCode = async (phone: string, code: string) => {
@@ -129,7 +133,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const res = await authApi.refreshToken(refreshToken);
       saveTokens(res.accessToken, res.refreshToken);
-      setState(prev => ({ ...prev, accessToken: res.accessToken, refreshToken: res.refreshToken }));
+      setState((prev: AuthState) => ({
+        ...prev,
+        accessToken: res.accessToken,
+        refreshToken: res.refreshToken,
+      }));
     } catch {
       clearAuth();
     }

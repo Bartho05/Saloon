@@ -72,7 +72,7 @@ describe('useBookingFlow', () => {
     expect(result.current[0].currentStep).toBe(3);
   });
 
-  it('advances step when client phone set', () => {
+  it('requires confirmation before advancing from the client step', () => {
     const { result } = renderHook(() => useBookingFlow());
     
     act(() => {
@@ -82,7 +82,14 @@ describe('useBookingFlow', () => {
       result.current[1].setClientPhone('11999999999');
     });
     
+    // A etapa de identificação não avança sozinha: o cliente precisa confirmar
     expect(result.current[0].client?.phone).toBe('11999999999');
+    expect(result.current[0].currentStep).toBe(3);
+    
+    act(() => {
+      result.current[1].nextStep();
+    });
+    
     expect(result.current[0].currentStep).toBe(4);
   });
 

@@ -3,7 +3,7 @@ import * as serviceController from '@controllers/serviceController';
 import * as employeeController from '@controllers/employeeController';
 import * as appointmentController from '@controllers/appointmentController';
 import * as settingsController from '@controllers/settingsController';
-import { ownerMiddleware } from '@middlewares/auth';
+import { authMiddleware, ownerMiddleware } from '@middlewares/auth';
 import {
   createServiceSchema,
   updateServiceSchema,
@@ -18,7 +18,7 @@ import { asyncHandler } from '@middlewares/errorHandler';
 const router = Router();
 
 // Todas as rotas requerem autenticação de owner
-router.use(ownerMiddleware);
+router.use(authMiddleware, ownerMiddleware);
 
 // Dashboard
 router.get('/appointments/today', asyncHandler(appointmentController.getTodayAppointments));

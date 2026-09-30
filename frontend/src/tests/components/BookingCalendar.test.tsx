@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { BookingCalendar } from '@components/BookingCalendar';
 import { bookingApi } from '@services/api';
 import { vi } from 'vitest';
@@ -8,6 +8,8 @@ vi.mock('@services/api', () => ({
     getSlots: vi.fn(),
   },
 }));
+
+const getSlotsMock = bookingApi.getSlots as unknown as ReturnType<typeof vi.fn>;
 
 describe('BookingCalendar', () => {
   const mockSlots = [
@@ -36,7 +38,7 @@ describe('BookingCalendar', () => {
   });
 
   it('displays available slots when day selected', async () => {
-    bookingApi.getSlots.mockResolvedValue({
+    getSlotsMock.mockResolvedValue({
       slots: mockSlots,
       grouped: { 10: ['2025-01-15T10:00:00'], 14: ['2025-01-15T14:00:00'] },
     });
@@ -56,7 +58,7 @@ describe('BookingCalendar', () => {
   });
 
   it('shows blocked day indicator', async () => {
-    bookingApi.getSlots.mockResolvedValue({
+    getSlotsMock.mockResolvedValue({
       slots: [],
       grouped: {},
       blocked: true,

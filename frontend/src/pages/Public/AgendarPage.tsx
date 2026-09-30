@@ -9,12 +9,12 @@ import { BookingConfirmation } from '@components/BookingConfirmation';
 import { useToast } from '@contexts/ToastContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import type { Service, Employee, TimeSlot, Client } from '@types';
+import type { Service, Employee, Client } from '@types';
 
 export function AgendarPage() {
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [state, actions, STEPS] = useBookingFlow();
+  const [state, actions] = useBookingFlow();
   
   const [services, setServices] = useState<Service[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -62,7 +62,7 @@ export function AgendarPage() {
         {services.map(svc => (
           <button
             key={svc.id}
-            onClick={() => { actions.setService(svc); actions.nextStep(); }}
+            onClick={() => actions.setService(svc)}
             className={`
               p-4 rounded-xl border-2 text-center transition-all
               ${state.service?.id === svc.id 
@@ -93,7 +93,7 @@ export function AgendarPage() {
           {filteredEmployees.map(emp => (
             <button
               key={emp.id}
-              onClick={() => { actions.setEmployee(emp); actions.nextStep(); }}
+              onClick={() => actions.setEmployee(emp)}
               className={`
                 w-full p-4 rounded-xl border-2 text-left transition-all
                 ${state.employee?.id === emp.id 
@@ -120,7 +120,7 @@ export function AgendarPage() {
       serviceId={state.service!.id}
       serviceDuration={state.service!.durationMinutes}
       selectedSlot={state.selectedSlot}
-      onSelectSlot={(slot) => { actions.setSlot(slot.start, slot); actions.nextStep(); }}
+      onSelectSlot={(slot) => actions.setSlot(slot.start, slot)}
     />
   );
 
@@ -188,7 +188,7 @@ export function AgendarPage() {
           value={state.client?.phone || ''}
           onChange={(phone) => actions.setClientPhone(phone)}
           required
-          error={step4Error}
+          error={step4Error ?? undefined}
           onEnterPress={() => handlePhoneSubmit(state.client?.phone || '')}
         />
         <button

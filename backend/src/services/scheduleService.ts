@@ -228,7 +228,7 @@ export async function validateBookingSlot(
     employeeId,
     startsAt,
     service.durationMinutes,
-    [{ startsAt: conflict?.startsAt || new Date(0), endsAt: conflict?.endsAt || new Date(0) }],
+    [], // sem conflitos (já verificado acima)
     bufferMinutes
   );
 

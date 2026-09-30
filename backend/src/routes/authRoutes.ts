@@ -10,6 +10,7 @@ import {
 } from '@utils/validation';
 import { validateBody } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
+import { authMiddleware, type AuthRequest } from '@middlewares/auth';
 
 const router = Router();
 
@@ -53,9 +54,9 @@ router.post(
 );
 
 // POST /auth/logout
-router.post('/logout', asyncHandler(authController.logout));
+router.post('/logout', authMiddleware, asyncHandler(authController.logout));
 
 // GET /auth/me
-router.get('/me', asyncHandler(authController.getMe));
+router.get('/me', authMiddleware, asyncHandler(authController.getMe as (req: AuthRequest, res: any) => Promise<void>));
 
 export default router;

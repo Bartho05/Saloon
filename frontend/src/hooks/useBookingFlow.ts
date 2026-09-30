@@ -44,6 +44,8 @@ const STEPS = [
   { key: 'confirm', label: 'Confirmar', icon: '✅' },
 ] as const;
 
+export { STEPS };
+
 export function useBookingFlow(): [BookingState & { currentStep: number; nextStep: () => void }, BookingActions, typeof STEPS] {
   const [state, setState] = useState<BookingState>(initialState);
   const [currentStep, setCurrentStep] = useState(0);
@@ -66,18 +68,30 @@ export function useBookingFlow(): [BookingState & { currentStep: number; nextSte
   }, [currentStep, canProceed]);
 
   const actions = useMemo<BookingActions>(() => ({
-    setService: (service) => setState(prev => ({
-      ...prev, service, employee: null, selectedDate: null, selectedSlot: null
-    })),
+    setService: (service) => {
+      setState(prev => ({
+        ...prev, service, employee: null, selectedDate: null, selectedSlot: null
+      }));
+      // Avança automaticamente para a escolha do profissional
+      setCurrentStep(1);
+    },
 
-    setEmployee: (employee) => setState(prev => ({
-      ...prev, employee, selectedDate: null, selectedSlot: null
-    })),
+    setEmployee: (employee) => {
+      setState(prev => ({
+        ...prev, employee, selectedDate: null, selectedSlot: null
+      }));
+      setCurrentStep(2);
+    },
 
-    setSlot: (date, slot) => setState(prev => ({
-      ...prev, selectedDate: date, selectedSlot: slot
-    })),
+    setSlot: (date, slot) => {
+      setState(prev => ({
+        ...prev, selectedDate: date, selectedSlot: slot
+      }));
+      setCurrentStep(3);
+    },
 
+    // A etapa de identificação é manual: o cliente precisa confirmar
+    // (e Possibly informedar nome/data de nascimento) antes de seguir.
     setClientPhone: (phone) => setState(prev => ({
       ...prev, client: { ...prev.client, phone } as BookingState['client']
     })),

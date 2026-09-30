@@ -13,27 +13,30 @@ export interface JwtPayload {
 
 export interface AuthRequest extends Request {
   user?: JwtPayload;
-  userEntity?: {
-    id: string;
-    name: string;
-    phone: string;
-    email?: string;
-    role: 'OWNER' | 'EMPLOYEE';
-    accessCode?: string;
-  } | {
-    id: string;
-    fullName: string;
-    phone: string;
-    birthDate: Date;
-  };
+  userEntity?:
+    | {
+        id: string;
+        name: string;
+        phone: string;
+        email: string | null;
+        role: 'OWNER' | 'EMPLOYEE';
+        accessCode: string | null;
+        isActive: boolean;
+      }
+    | {
+        id: string;
+        fullName: string;
+        phone: string;
+        birthDate: Date;
+      };
 }
 
 export function generateTokens(payload: Omit<JwtPayload, 'type'>): { accessToken: string; refreshToken: string } {
   const accessToken = jwt.sign({ ...payload, type: 'access' }, env.JWT_SECRET, {
-    expiresIn: env.JWT_EXPIRES_IN,
+    expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   });
   const refreshToken = jwt.sign({ ...payload, type: 'refresh' }, env.JWT_REFRESH_SECRET, {
-    expiresIn: env.JWT_REFRESH_EXPIRES_IN,
+    expiresIn: env.JWT_REFRESH_EXPIRES_IN as jwt.SignOptions['expiresIn'],
   });
   return { accessToken, refreshToken };
 }
@@ -91,7 +94,15 @@ export async function ownerMiddleware(
   // Busca dados completos do dono
   const owner = await prisma.user.findUnique({
     where: { id: req.user.sub },
-    select: { id: true, name: true, phone: true, email: true, role: true, accessCode: true },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      role: true,
+      accessCode: true,
+      isActive: true,
+    },
   });
 
   if (!owner || !owner.isActive) {

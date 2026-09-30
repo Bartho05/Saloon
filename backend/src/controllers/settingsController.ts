@@ -4,6 +4,26 @@ import { AuthRequest } from '@middlewares/auth';
 import { updateSettingsSchema } from '@utils/validation';
 import { AppError } from '@middlewares/errorHandler';
 import { invalidateWhatsAppCache, testWhatsAppConfig } from '@services/whatsappService';
+import { runBirthdayJobNow, runReminderJobNow } from '@services/cronService';
+
+type WhatsappConfig = {
+  provider?: string;
+  instanceId?: string;
+  token?: string;
+  apiUrl?: string;
+} | null;
+
+/** Remove a credencial do WhatsApp da resposta e informa se está configurado */
+function sanitizeSettings<T extends { whatsappApiConfig?: unknown }>(settings: T) {
+  const { whatsappApiConfig, ...safe } = settings;
+  const config = (whatsappApiConfig ?? null) as WhatsappConfig;
+  return {
+    settings: {
+      ...safe,
+      whatsappConfigured: Boolean(config?.instanceId && config?.token),
+    },
+  };
+}
 
 /**
  * GET /owner/settings
@@ -38,14 +58,7 @@ export async function getSettings(req: AuthRequest, res: Response): Promise<void
   }
 
   // Remove config sensível do WhatsApp do response
-  const { whatsappApiConfig, ...safeSettings } = settings;
-
-  res.json({
-    settings: {
-      ...safeSettings,
-      whatsappConfigured: !!whatsappApiConfig?.instanceId && !!whatsappApiConfig?.token,
-    },
-  });
+  res.json(sanitizeSettings(settings));
 }
 
 /**
@@ -65,14 +78,7 @@ export async function updateSettings(req: AuthRequest, res: Response): Promise<v
     invalidateWhatsAppCache();
   }
 
-  const { whatsappApiConfig, ...safeSettings } = settings;
-
-  res.json({
-    settings: {
-      ...safeSettings,
-      whatsappConfigured: !!whatsappApiConfig?.instanceId && !!whatsappApiConfig?.token,
-    },
-  });
+  res.json(sanitizeSettings(settings));
 }
 
 /**
@@ -100,7 +106,6 @@ export async function testWhatsApp(req: AuthRequest, res: Response): Promise<voi
  * Executa job de aniversários manualmente (para teste)
  */
 export async function runBirthdayJob(req: AuthRequest, res: Response): Promise<void> {
-  const { runBirthdayJobNow } = await import('@services/cronService');
   const result = await runBirthdayJobNow();
   res.json({ message: 'Job executado', ...result });
 }
@@ -110,7 +115,6 @@ export async function runBirthdayJob(req: AuthRequest, res: Response): Promise<v
  * Executa job de lembretes manualmente (para teste)
  */
 export async function runReminderJob(req: AuthRequest, res: Response): Promise<void> {
-  const { runReminderJobNow } = await import('@services/cronService');
   const result = await runReminderJobNow();
   res.json({ message: 'Job executado', ...result });
 }

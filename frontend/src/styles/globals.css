@@ -260,11 +260,19 @@
     @apply flex gap-1 bg-brand-grayLight p-1 rounded-none;
   }
 
+  /* Estado vem de .tab-active/.tab-inactive, não de data-[state=active].
+     A variante de atributo em @apply não é gerada de forma confiável —
+     verificamos no browser que a aba ativa ficava sem fundo. */
   .tab {
-    @apply flex items-center gap-2 px-4 py-2.5 font-display font-medium text-body-sm text-brand-grayMid
-           rounded-none transition-all duration-fast
-           data-[state=active]:bg-brand-white data-[state=active]:text-brand-black
-           data-[state=active]:shadow-elevated;
+    @apply flex items-center gap-2 px-4 py-2.5 font-display font-medium text-body-sm rounded-none transition-all duration-fast;
+  }
+
+  .tab-active {
+    @apply bg-brand-white text-brand-black shadow-elevated;
+  }
+
+  .tab-inactive {
+    @apply text-brand-grayMid hover:text-brand-black;
   }
 
   /* ========== DROPDOWN ========== */

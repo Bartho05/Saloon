@@ -1,8 +1,19 @@
 import { useState, useEffect } from 'react';
 import { ownerApi, employeesApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
-import { formatDateTime } from '@utils/date';
+import { formatCurrency as fmtCurrency } from '@utils/date';
 import type { Appointment, Employee } from '@types';
+import { Button, Input, Select, Container, Card } from '@components/ui';
+import { PageHeader, StatusBadge, EmptyState, PageSpinner } from '@components/Dashboard';
+import { ListIcon, GridIcon } from '@components/icons';
+
+const STATUS_OPTIONS = [
+  { value: '', label: 'Todos' },
+  { value: 'SCHEDULED', label: 'Agendados' },
+  { value: 'COMPLETED', label: 'Concluídos' },
+  { value: 'CANCELLED', label: 'Cancelados' },
+  { value: 'NO_SHOW', label: 'Não compareceu' },
+];
 
 export function OwnerSchedulePage() {
   const { showToast } = useToast();
@@ -46,176 +57,164 @@ export function OwnerSchedulePage() {
     }
   };
 
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters(prev => ({ ...prev, [key]: value }));
+  const handleFilterChange = (key: keyof typeof filters, value: string) => {
+    setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
   const clearFilters = () => {
     setFilters({ status: '', startDate: '', endDate: '', employeeId: '' });
   };
 
-  const getEmployeeColor = (employeeId: string) => {
-    const colors = [
-      'bg-brand-black', 'bg-green-500', 'bg-purple-500', 'bg-orange-500',
-      'bg-pink-500', 'bg-teal-500', 'bg-indigo-500', 'bg-red-500',
-    ];
-    let hash = 0;
-    for (let i = 0; i < employeeId.length; i++) {
-      hash = employeeId.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    return colors[Math.abs(hash) % colors.length];
-  };
+  const hasFilters = Object.values(filters).some(Boolean);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-black border-t-transparent" />
-      </div>
-    );
-  }
+  if (loading) return <PageSpinner />;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-brand-black">Agenda Geral</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-4 py-2  text-sm font-medium ${viewMode === 'list' ? 'bg-brand-black text-white' : 'bg-brand-gray text-brand-black'}`}
-          >
-            Lista
-          </button>
-          <button
-            onClick={() => setViewMode('calendar')}
-            className={`px-4 py-2  text-sm font-medium ${viewMode === 'calendar' ? 'bg-brand-black text-white' : 'bg-brand-gray text-brand-black'}`}
-          >
-            Calendário
-          </button>
-        </div>
-      </div>
-
-      {/* Filtros */}
-      <div className="bg-brand-white  border border-brand-gray p-4">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-brand-black mb-1">Status</label>
-            <select
-              value={filters.status}
-              onChange={e => handleFilterChange('status', e.target.value)}
-              className="w-full px-4 py-2 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
+    <Container size="full" className="!px-0">
+      <PageHeader
+        title="Agenda Geral"
+        description={`${appointments.length} agendamento${appointments.length !== 1 ? 's' : ''} no filtro atual`}
+        action={
+          <div className="tabs" role="tablist" aria-label="Modo de visualização">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'list'}
+              onClick={() => setViewMode('list')}
+              className={`tab ${viewMode === 'list' ? 'tab-active' : 'tab-inactive'}`}
             >
-              <option value="">Todos</option>
-              <option value="SCHEDULED">Agendados</option>
-              <option value="COMPLETED">Concluídos</option>
-              <option value="CANCELLED">Cancelados</option>
-              <option value="NO_SHOW">Não compareceu</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-black mb-1">Profissional</label>
-            <select
-              value={filters.employeeId}
-              onChange={e => handleFilterChange('employeeId', e.target.value)}
-              className="w-full px-4 py-2 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
+              <ListIcon className="w-3.5 h-3.5" />
+              Lista
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={viewMode === 'calendar'}
+              onClick={() => setViewMode('calendar')}
+              className={`tab ${viewMode === 'calendar' ? 'tab-active' : 'tab-inactive'}`}
             >
-              <option value="">Todos</option>
-              {employees.map(emp => (
-                <option key={emp.id} value={emp.id}>{emp.name}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-black mb-1">Data Início</label>
-            <input
-              type="date"
-              value={filters.startDate}
-              onChange={e => handleFilterChange('startDate', e.target.value)}
-              className="w-full px-4 py-2 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-brand-black mb-1">Data Fim</label>
-            <input
-              type="date"
-              value={filters.endDate}
-              onChange={e => handleFilterChange('endDate', e.target.value)}
-              className="w-full px-4 py-2 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
-            />
-          </div>
-          <div className="flex items-end">
-            <button onClick={clearFilters} className="w-full px-4 py-2 border border-brand-gray text-brand-black  hover:bg-brand-grayLight font-medium">
-              Limpar Filtros
+              <GridIcon className="w-3.5 h-3.5" />
+              Calendário
             </button>
           </div>
+        }
+      />
+
+      {/* Filtros */}
+      <Card className="p-5 md:p-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+          <Select
+            label="Status"
+            value={filters.status}
+            onChange={(e) => handleFilterChange('status', e.target.value)}
+            options={STATUS_OPTIONS}
+          />
+          <Select
+            label="Profissional"
+            value={filters.employeeId}
+            onChange={(e) => handleFilterChange('employeeId', e.target.value)}
+            options={[
+              { value: '', label: 'Todos' },
+              ...employees.map((e) => ({ value: e.id, label: e.name })),
+            ]}
+          />
+          <Input
+            label="Data início"
+            type="date"
+            value={filters.startDate}
+            onChange={(e) => handleFilterChange('startDate', e.target.value)}
+          />
+          <Input
+            label="Data fim"
+            type="date"
+            value={filters.endDate}
+            onChange={(e) => handleFilterChange('endDate', e.target.value)}
+          />
         </div>
-      </div>
+        {hasFilters && (
+          <div className="mt-5 pt-5 border-t border-brand-gray">
+            <Button variant="minimal" onClick={clearFilters}>
+              Limpar filtros
+            </Button>
+          </div>
+        )}
+      </Card>
 
       {viewMode === 'list' ? (
-        <div className="bg-brand-white  border border-brand-gray">
+        <Card>
           {appointments.length === 0 ? (
-            <div className="text-center py-12 text-brand-grayMid">
-              <svg className="w-12 h-12 mx-auto mb-3 text-brand-grayMid" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              <p>Nenhum agendamento encontrado</p>
-            </div>
+            <EmptyState
+              title="Nenhum agendamento encontrado"
+              description={
+                hasFilters
+                  ? 'Ajuste ou limpe os filtros para ver outros agendamentos.'
+                  : 'Quando houver agendamentos, eles aparecem aqui.'
+              }
+            />
           ) : (
-            <div className="divide-y divide-brand-gray">
-              {appointments.map(apt => (
-                <div key={apt.id} className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-brand-grayLight">
-                  <div className="flex items-center gap-4 flex-1 min-w-0">
-                    <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: getEmployeeColor(apt.employeeId) }} />
-                    <div className="min-w-0">
-                      <p className="font-medium text-brand-black truncate">{apt.client?.fullName || 'Cliente'}</p>
-                      <p className="text-sm text-brand-grayMid flex items-center gap-2">
-                        <span>{formatDateTime(apt.startsAt)}</span>
-                        <span>•</span>
-                        <span>{apt.service?.name}</span>
-                        <span>•</span>
-                        <span>{apt.employee?.name}</span>
-                      </p>
-                    </div>
+            <ul>
+              {appointments.map((apt) => (
+                <li
+                  key={apt.id}
+                  className="px-5 md:px-6 py-4 flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-5 border-b border-brand-gray last:border-b-0 hover:bg-brand-grayLight transition-colors duration-fast"
+                >
+                  {/* Data/hora em bloco fixo */}
+                  <div className="flex-shrink-0 w-16 lg:w-20">
+                    <p className="font-display font-bold text-body-lg tabular-nums leading-none">
+                      {new Date(apt.startsAt).toLocaleDateString('pt-BR', { day: '2-digit' })}
+                    </p>
+                    <p className="text-caption text-brand-grayMid mt-1">
+                      {new Date(apt.startsAt).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', '')}
+                    </p>
+                    <p className="text-caption text-brand-grayMid tabular-nums">
+                      {new Date(apt.startsAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <span className="font-medium text-brand-black">{formatCurrency(apt.service?.price || 0)}</span>
-                    <span className={`px-3 py-1 text-xs font-medium rounded-full ${getStatusColor(apt.status)}`}>
-                      {getStatusLabel(apt.status)}
+
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display font-medium text-body truncate">
+                      {apt.client?.fullName || 'Cliente'}
+                    </p>
+                    <p className="text-body-sm text-brand-grayMid truncate">
+                      {apt.service?.name} &middot; {apt.employee?.name}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-5 flex-shrink-0">
+                    <span className="font-display font-medium text-body tabular-nums">
+                      {fmtCurrency(apt.service?.price || 0)}
                     </span>
+                    <StatusBadge tone={STATUS_TONE[apt.status]}>{STATUS_LABEL[apt.status]}</StatusBadge>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
-        </div>
+        </Card>
       ) : (
-        <div className="bg-brand-white  border border-brand-gray p-4">
-          <p className="text-brand-grayMid text-center py-8">Visualização de calendário em desenvolvimento</p>
-        </div>
+        <Card>
+          <EmptyState
+            title="Visão de calendário em construção"
+            description="A lista é a visão mais útil para operação diária. A grade por mês chega na próxima etapa."
+          />
+        </Card>
       )}
-    </div>
+    </Container>
   );
 }
 
-function getStatusColor(status: string): string {
-  switch (status) {
-    case 'SCHEDULED': return 'bg-brand-gray text-brand-black';
-    case 'COMPLETED': return 'bg-green-50 text-green-800';
-    case 'CANCELLED': return 'bg-red-100 text-red-800';
-    case 'NO_SHOW': return 'bg-brand-gray text-brand-black';
-    default: return 'bg-brand-gray text-brand-black';
-  }
-}
+const STATUS_LABEL: Record<Appointment['status'], string> = {
+  SCHEDULED: 'Agendado',
+  COMPLETED: 'Concluído',
+  CANCELLED: 'Cancelado',
+  NO_SHOW: 'Não compareceu',
+};
 
-function getStatusLabel(status: string): string {
-  switch (status) {
-    case 'SCHEDULED': return 'Agendado';
-    case 'COMPLETED': return 'Concluído';
-    case 'CANCELLED': return 'Cancelado';
-    case 'NO_SHOW': return 'Não compareceu';
-    default: return status;
-  }
-}
+const STATUS_TONE: Record<Appointment['status'], 'info' | 'success' | 'danger' | 'warning'> = {
+  SCHEDULED: 'info',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+  NO_SHOW: 'warning',
+};
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-}
+export default OwnerSchedulePage;

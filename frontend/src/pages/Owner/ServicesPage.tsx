@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
-import { ownerApi, servicesApi } from '@services/api';
+import { ownerApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatCurrency } from '@utils/date';
 import type { Service } from '@types';
+import { Button, Input, Textarea, Modal, Container, Card } from '@components/ui';
+import { PageHeader, EmptyState, PageSpinner } from '@components/Dashboard';
+import { PlusIcon, PencilIcon, TrashIcon, RefreshIcon } from '@components/icons';
 
 export function OwnerServicesPage() {
   const { showToast } = useToast();
@@ -15,8 +18,12 @@ export function OwnerServicesPage() {
     description: '',
     durationMinutes: 30,
     price: 0,
+    isActive: true,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<Service | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadServices();
@@ -25,7 +32,10 @@ export function OwnerServicesPage() {
   const loadServices = async () => {
     setLoading(true);
     try {
-      const res = await servicesApi.getAll();
+      // Rota autenticada: a pública /services não devolve `isActive`, e sem
+      // esse campo todo serviço aparecia como "Inativo" e não dava para
+      // reativar um serviço desativado.
+      const res = await ownerApi.getServices();
       setServices(res.services);
     } catch (err: any) {
       showToast({ type: 'error', title: 'Erro', message: err.message });
@@ -45,9 +55,7 @@ export function OwnerServicesPage() {
         await ownerApi.createService(formData);
         showToast({ type: 'success', title: 'Serviço criado' });
       }
-      setShowModal(false);
-      setEditingService(null);
-      resetForm();
+      closeModal();
       loadServices();
     } catch (err: any) {
       showToast({ type: 'error', title: 'Erro', message: err.message });
@@ -56,177 +64,275 @@ export function OwnerServicesPage() {
     }
   };
 
-  const handleEdit = (service: Service) => {
+  const handleToggle = async (service: Service) => {
+    setTogglingId(service.id);
+    try {
+      await ownerApi.updateService(service.id, { isActive: !service.isActive });
+      showToast({
+        type: 'success',
+        title: service.isActive ? 'Serviço desativado' : 'Serviço reativado',
+      });
+      loadServices();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Erro', message: err.message });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDelete) return;
+    setDeleting(true);
+    try {
+      await ownerApi.deleteService(confirmDelete.id);
+      showToast({ type: 'success', title: 'Serviço desativado' });
+      setConfirmDelete(null);
+      loadServices();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Erro', message: err.message });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingService(null);
+    setFormData({ name: '', description: '', durationMinutes: 30, price: 0, isActive: true });
+  };
+
+  const openCreateModal = () => {
+    setEditingService(null);
+    setFormData({ name: '', description: '', durationMinutes: 30, price: 0, isActive: true });
+    setShowModal(true);
+  };
+
+  const openEditModal = (service: Service) => {
     setEditingService(service);
     setFormData({
       name: service.name,
       description: service.description || '',
       durationMinutes: service.durationMinutes,
       price: service.price,
+      isActive: service.isActive,
     });
     setShowModal(true);
   };
 
-  const handleDelete = async (id: string) => {
-    if (!window.confirm('Tem certeza? Serviços com agendamentos futuros não podem ser desativados.')) return;
-    try {
-      await ownerApi.deleteService(id);
-      showToast({ type: 'success', title: 'Serviço desativado' });
-      loadServices();
-    } catch (err: any) {
-      showToast({ type: 'error', title: 'Erro', message: err.message });
-    }
-  };
+  if (loading) return <PageSpinner />;
 
-  const resetForm = () => {
-    setFormData({ name: '', description: '', durationMinutes: 30, price: 0 });
-  };
-
-  const openCreateModal = () => {
-    setEditingService(null);
-    resetForm();
-    setShowModal(true);
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-4 border-brand-black border-t-transparent" />
-      </div>
-    );
-  }
+  const activeCount = services.filter((s) => s.isActive).length;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-brand-black">Serviços</h1>
-        <button onClick={openCreateModal} className="px-4 py-2 bg-brand-black text-white  font-medium hover:bg-brand-grayDark">
-          <svg className="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
-          Novo Serviço
-        </button>
-      </div>
+    <Container size="full" className="!px-0">
+      <PageHeader
+        title="Serviços"
+        description={`${activeCount} ativo${activeCount !== 1 ? 's' : ''} de ${services.length} cadastrado${services.length !== 1 ? 's' : ''}`}
+        action={
+          <Button onClick={openCreateModal}>
+            <PlusIcon className="w-4 h-4" />
+            Novo Serviço
+          </Button>
+        }
+      />
 
       {services.length === 0 ? (
-        <div className="text-center py-12 bg-brand-grayLight ">
-          <svg className="w-16 h-16 text-brand-grayMid mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.75 3.101v3.867M9 14.25v2.25m-2.247-3.375l1.515 1.515m0 0l1.515 1.516m-1.515-1.515l-1.515 1.515M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
-          </svg>
-          <h3 className="text-lg font-medium text-brand-black mb-1">Nenhum serviço cadastrado</h3>
-          <p className="text-brand-grayMid mb-4">Crie seu primeiro serviço para começar a receber agendamentos</p>
-          <button onClick={openCreateModal} className="px-6 py-3 bg-brand-black text-white  font-medium hover:bg-brand-grayDark">
-            Criar Serviço
-          </button>
-        </div>
+        <Card>
+          <EmptyState
+            title="Nenhum serviço cadastrado"
+            description="Crie seu primeiro serviço para começar a receber agendamentos."
+            action={<Button onClick={openCreateModal}>Criar Serviço</Button>}
+          />
+        </Card>
       ) : (
-        <div className="bg-brand-white  border border-brand-gray divide-y divide-brand-gray">
-          {services.map(service => (
-            <div key={service.id} className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-brand-grayLight">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-medium text-brand-black">{service.name}</h3>
-                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${service.isActive ? 'bg-green-50 text-green-800' : 'bg-brand-gray text-brand-black'}`}>
-                    {service.isActive ? 'Ativo' : 'Inativo'}
-                  </span>
+        <Card>
+          <ul>
+            {services.map((service) => (
+              <li
+                key={service.id}
+                className="group px-5 md:px-6 py-5 flex items-center gap-4 border-b border-brand-gray last:border-b-0 hover:bg-brand-grayLight transition-colors duration-fast"
+              >
+                {/* Índice */}
+                <span className="font-display font-bold text-body-lg text-brand-grayMid w-6 flex-shrink-0">
+                  {String(services.indexOf(service) + 1).padStart(2, '0')}
+                </span>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <h3 className="font-display font-medium text-body-lg">{service.name}</h3>
+                    <span className="inline-flex items-center gap-1.5 text-caption text-brand-grayMid">
+                      <span
+                        className={`w-1.5 h-1.5 rounded-full ${
+                          service.isActive ? 'bg-brand-black' : 'bg-brand-gray border border-brand-grayMid'
+                        }`}
+                        aria-hidden="true"
+                      />
+                      {service.isActive ? 'Ativo' : 'Inativo'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-x-4 gap-y-1 mt-1.5 flex-wrap text-body-sm text-brand-grayMid">
+                    <span className="badge badge-muted">{service.durationMinutes} min</span>
+                    {service.description && (
+                      <span className="truncate max-w-md">{service.description}</span>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-brand-grayMid mt-1 flex items-center gap-4">
-                  <span>{service.durationMinutes} min</span>
-                  <span className="font-medium text-brand-black">{formatCurrency(service.price)}</span>
-                  {service.description && <span className="truncate max-w-xs">{service.description}</span>}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={() => handleEdit(service)} className="p-2 text-brand-grayMid hover:text-brand-black hover:bg-brand-gray ">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                </button>
-                <button onClick={() => handleDelete(service.id)} className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 ">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
+
+                <span className="font-display font-medium text-body-lg tabular-nums flex-shrink-0 w-28 text-right">
+                  {formatCurrency(service.price)}
+                </span>
+
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <IconAction
+                    label={service.isActive ? `Desativar ${service.name}` : `Reativar ${service.name}`}
+                    onClick={() => handleToggle(service)}
+                    disabled={togglingId === service.id}
+                    spinning={togglingId === service.id}
+                  >
+                    <RefreshIcon className="w-4 h-4" />
+                  </IconAction>
+                  <IconAction label={`Editar ${service.name}`} onClick={() => openEditModal(service)}>
+                    <PencilIcon className="w-4 h-4" />
+                  </IconAction>
+                  <IconAction
+                    label={`Excluir ${service.name}`}
+                    onClick={() => setConfirmDelete(service)}
+                    disabled={!service.isActive}
+                  >
+                    <TrashIcon className="w-4 h-4" />
+                  </IconAction>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-brand-white  max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-4 border-b border-brand-gray flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-brand-black">{editingService ? 'Editar Serviço' : 'Novo Serviço'}</h2>
-              <button onClick={() => { setShowModal(false); setEditingService(null); }} className="p-2 text-brand-grayMid hover:text-brand-black">
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">Nome *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                  required
-                  className="w-full px-4 py-3 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
-                  placeholder="Ex: Corte Feminino"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-brand-black mb-1">Descrição</label>
-                <textarea
-                  value={formData.description}
-                  onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  rows={3}
-                  className="w-full px-4 py-3 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
-                  placeholder="Detalhes do serviço..."
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-brand-black mb-1">Duração (min) *</label>
-                  <input
-                    type="number"
-                    value={formData.durationMinutes}
-                    onChange={e => setFormData(prev => ({ ...prev, durationMinutes: parseInt(e.target.value) || 0 }))}
-                    min={15}
-                    max={480}
-                    step={15}
-                    required
-                    className="w-full px-4 py-3 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-brand-black mb-1">Preço (R$) *</label>
-                  <input
-                    type="number"
-                    value={formData.price}
-                    onChange={e => setFormData(prev => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
-                    min={0}
-                    step={0.01}
-                    required
-                    className="w-full px-4 py-3 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-3 pt-4">
-                <button type="button" onClick={() => { setShowModal(false); setEditingService(null); }} className="flex-1 py-3 px-4 border border-brand-gray text-brand-black  font-medium hover:bg-brand-grayLight">
-                  Cancelar
-                </button>
-                <button type="submit" disabled={submitting} className="flex-1 py-3 px-4 bg-brand-black text-white  font-medium hover:bg-brand-grayDark disabled:opacity-50">
-                  {submitting ? 'Salvando...' : (editingService ? 'Atualizar' : 'Criar')}
-                </button>
-              </div>
-            </form>
+      <Modal
+        open={showModal}
+        onClose={closeModal}
+        title={editingService ? 'Editar Serviço' : 'Novo Serviço'}
+        description={editingService ? 'Altere os dados do serviço.' : 'Defina duração e preço.'}
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <Input
+            label="Nome"
+            value={formData.name}
+            onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
+            required
+            placeholder="Ex: Corte Masculino"
+          />
+
+          <Textarea
+            label="Descrição"
+            value={formData.description}
+            onChange={(e) => setFormData((prev) => ({ ...prev, description: e.target.value }))}
+            rows={3}
+            placeholder="Detalhes do serviço..."
+          />
+
+          <div className="grid grid-cols-2 gap-5">
+            <Input
+              label="Duração (min)"
+              type="number"
+              value={formData.durationMinutes}
+              onChange={(e) =>
+                setFormData((prev) => ({ ...prev, durationMinutes: parseInt(e.target.value) || 0 }))
+              }
+              min={15}
+              max={480}
+              step={15}
+              required
+            />
+            <Input
+              label="Preço (R$)"
+              type="number"
+              value={formData.price}
+              onChange={(e) => setFormData((prev) => ({ ...prev, price: parseFloat(e.target.value) || 0 }))}
+              min={0}
+              step={0.01}
+              required
+            />
           </div>
+
+          {editingService && (
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={formData.isActive}
+                onChange={(e) => setFormData((prev) => ({ ...prev, isActive: e.target.checked }))}
+                className="w-4 h-4 border-brand-gray accent-brand-black"
+              />
+              <span className="text-body-sm">Serviço ativo (aparece no agendamento público)</span>
+            </label>
+          )}
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="outline" className="flex-1" onClick={closeModal} disabled={submitting}>
+              Cancelar
+            </Button>
+            <Button type="submit" className="flex-1" disabled={submitting} loading={submitting}>
+              {editingService ? 'Salvar alterações' : 'Criar serviço'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(confirmDelete)}
+        onClose={() => setConfirmDelete(null)}
+        title="Desativar serviço"
+        description={
+          confirmDelete
+            ? `${confirmDelete.name} deixará de aparecer no agendamento público. Você pode reativar depois.`
+            : undefined
+        }
+        size="sm"
+      >
+        <div className="flex gap-3 justify-end">
+          <Button variant="outline" onClick={() => setConfirmDelete(null)} disabled={deleting}>
+            Cancelar
+          </Button>
+          <Button onClick={handleDelete} disabled={deleting} loading={deleting}>
+            Desativar
+          </Button>
         </div>
-      )}
-    </div>
+      </Modal>
+    </Container>
   );
 }
+
+function IconAction({
+  label,
+  onClick,
+  disabled,
+  spinning,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  spinning?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={label}
+      aria-label={label}
+      className="p-2.5 text-brand-grayMid hover:text-brand-black hover:bg-brand-white border border-transparent hover:border-brand-gray transition-colors duration-fast disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:border-transparent"
+    >
+      {spinning ? (
+        <span className="block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+      ) : (
+        children
+      )}
+    </button>
+  );
+}
+
+export default OwnerServicesPage;

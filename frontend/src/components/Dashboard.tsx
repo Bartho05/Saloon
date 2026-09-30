@@ -37,14 +37,25 @@ interface StatCardProps {
   label: string;
   value: string | number;
   hint?: string;
+  /** 'sm' para grades densas (6 colunas), 'md' para cards avulsos */
+  size?: 'sm' | 'md';
 }
 
-export function StatCard({ label, value, hint }: StatCardProps) {
+export function StatCard({ label, value, hint, size = 'md' }: StatCardProps) {
   return (
     <Card variant="hover">
       <CardContent>
         <p className="font-display text-caption text-brand-grayMid">{label}</p>
-        <p className="font-display font-bold text-display-sm mt-2 break-words">{value}</p>
+        {/* Escala responsiva: em grids de 2 colunas no mobile o card fica com
+            ~120px de conteudo, e "R$ 1.820,00" a 24px nao cabe. O
+            whitespace-nowrap evita a quebra feia no meio do valor. */}
+        <p
+          className={`font-display font-bold mt-2 tabular-nums whitespace-nowrap ${
+            size === 'sm' ? 'text-lg sm:text-2xl' : 'text-xl sm:text-3xl'
+          }`}
+        >
+          {value}
+        </p>
         {hint && <p className="text-caption text-brand-grayMid mt-1">{hint}</p>}
       </CardContent>
     </Card>

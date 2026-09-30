@@ -56,10 +56,10 @@ export function OwnerFinancialPage() {
         action={<PeriodSelector value={period} onChange={setPeriod} />}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        <StatCard label="Faturamento total" value={formatCurrency(data?.totals.revenue ?? 0)} />
-        <StatCard label="Atendimentos concluídos" value={data?.totals.appointments ?? 0} />
-        <StatCard label="Ticket médio" value={formatCurrency(data?.totals.averageTicket ?? 0)} />
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
+        <StatCard size="sm" label="Faturamento total" value={formatCurrency(data?.totals.revenue ?? 0)} />
+        <StatCard size="sm" label="Atendimentos concluídos" value={data?.totals.appointments ?? 0} />
+        <StatCard size="sm" label="Ticket médio" value={formatCurrency(data?.totals.averageTicket ?? 0)} />
       </div>
 
       <Card className="mb-6">

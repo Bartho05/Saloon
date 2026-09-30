@@ -21,8 +21,7 @@ export function PeriodSelector({ value, onChange }: PeriodSelectorProps) {
           role="tab"
           aria-selected={value === opt.value}
           onClick={() => onChange(opt.value)}
-          data-state={value === opt.value ? 'active' : 'inactive'}
-          className="tab"
+          className={`tab ${value === opt.value ? 'tab-active' : 'tab-inactive'}`}
         >
           {opt.label}
         </button>

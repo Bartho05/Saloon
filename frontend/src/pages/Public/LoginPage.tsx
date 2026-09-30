@@ -199,7 +199,10 @@ export function LoginPage() {
   };
 
   return (
-    <Section className="min-h-screen flex items-center justify-center px-4 py-16">
+    // min-h-screen no wrapper (não no Section) para centralizar sem
+    // brigar com o padding que o Section já aplica.
+    <div className="min-h-screen flex items-center">
+      <Section size="sm" className="w-full flex items-center justify-center">
       <Container size="sm">
         <Card variant="padded">
           <CardContent>
@@ -222,7 +225,7 @@ export function LoginPage() {
                     setStep('phone');
                     setError(null);
                   }}
-                  className="tab"
+                  className={`tab ${userType === tab.key ? 'tab-active' : 'tab-inactive'}`}
                 >
                   {tab.label}
                 </button>
@@ -350,7 +353,8 @@ export function LoginPage() {
           </CardContent>
         </Card>
       </Container>
-    </Section>
+      </Section>
+    </div>
   );
 }
 

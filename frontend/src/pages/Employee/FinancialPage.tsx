@@ -58,11 +58,12 @@ export function EmployeeFinancialPage() {
         action={<PeriodSelector value={period} onChange={setPeriod} />}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <StatCard label="Faturamento" value={formatCurrency(totals?.revenue ?? 0)} />
-        <StatCard label="Atendimentos concluídos" value={totals?.completed ?? 0} />
-        <StatCard label="Ticket médio" value={formatCurrency(totals?.averageTicket ?? 0)} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+        <StatCard size="sm" label="Faturamento" value={formatCurrency(totals?.revenue ?? 0)} />
+        <StatCard size="sm" label="Atendimentos concluídos" value={totals?.completed ?? 0} />
+        <StatCard size="sm" label="Ticket médio" value={formatCurrency(totals?.averageTicket ?? 0)} />
         <StatCard
+          size="sm"
           label="Agendamentos no período"
           value={totals?.appointments ?? 0}
           hint={`${totals?.cancelled ?? 0} cancelado(s)`}

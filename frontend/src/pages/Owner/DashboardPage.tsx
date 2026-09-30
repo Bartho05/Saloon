@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ownerApi, servicesApi, employeesApi } from '@services/api';
+import { ownerApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatDateTime, formatCurrency } from '@utils/date';
 import type { Appointment, Service, Employee } from '@types';
@@ -41,10 +41,13 @@ export function OwnerDashboardPage() {
   const loadDashboard = async () => {
     setLoading(true);
     try {
+      // Usa as rotas autenticadas do owner: as públicas (/services,
+      // /employees/active) não devolvem `isActive`, então filtrar por ele
+      // resultava sempre em zero.
       const [todayRes, servicesRes, employeesRes] = await Promise.all([
         ownerApi.getDashboard(),
-        servicesApi.getAll(),
-        employeesApi.getActive(),
+        ownerApi.getServices(),
+        ownerApi.getEmployees(),
       ]);
 
       setTodayAppointments(todayRes.appointments);
@@ -100,12 +103,12 @@ export function OwnerDashboardPage() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-10">
-        <StatCard label="Agendamentos hoje" value={stats.todayCount} />
-        <StatCard label="Faturamento hoje" value={formatCurrency(stats.todayRevenue)} />
-        <StatCard label="Agendamentos no mês" value={stats.monthCount} />
-        <StatCard label="Faturamento no mês" value={formatCurrency(stats.monthRevenue)} />
-        <StatCard label="Funcionários ativos" value={stats.activeEmployees} />
-        <StatCard label="Serviços ativos" value={stats.activeServices} />
+        <StatCard size="sm" label="Agendamentos hoje" value={stats.todayCount} />
+        <StatCard size="sm" label="Faturamento hoje" value={formatCurrency(stats.todayRevenue)} />
+        <StatCard size="sm" label="Agendamentos no mês" value={stats.monthCount} />
+        <StatCard size="sm" label="Faturamento no mês" value={formatCurrency(stats.monthRevenue)} />
+        <StatCard size="sm" label="Funcionários ativos" value={stats.activeEmployees} />
+        <StatCard size="sm" label="Serviços ativos" value={stats.activeServices} />
       </div>
 
       <Card>

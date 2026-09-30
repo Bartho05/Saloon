@@ -86,37 +86,37 @@ export function OwnerDashboardPage() {
         <StatCard
           title="Agendamentos Hoje"
           value={stats.todayCount}
-          icon="📅"
+          icon=""
           color="blue"
         />
         <StatCard
           title="Faturamento Hoje"
           value={formatCurrency(stats.todayRevenue)}
-          icon="💰"
+          icon=""
           color="green"
         />
         <StatCard
           title="Agendamentos Mês"
           value={stats.monthCount}
-          icon="📊"
+          icon=""
           color="purple"
         />
         <StatCard
           title="Faturamento Mês"
           value={formatCurrency(stats.monthRevenue)}
-          icon="📈"
+          icon=""
           color="emerald"
         />
         <StatCard
           title="Funcionários Ativos"
           value={stats.activeEmployees}
-          icon="👥"
+          icon=""
           color="orange"
         />
         <StatCard
           title="Serviços Ativos"
           value={stats.activeServices}
-          icon="✂️"
+          icon=""
           color="pink"
         />
       </div>

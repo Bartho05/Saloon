@@ -55,32 +55,32 @@ export function LandingPage() {
 
           <div className="grid md:grid-cols-3 gap-8">
             <FeatureCard
-              icon="📅"
+              icon=""
               title="Agendamento Online"
               description="Marque seu horário 24/7 sem precisar ligar. Escolha serviço, profissional e melhor horário."
             />
             <FeatureCard
-              icon="👨‍🎨"
+              icon=""
               title="Profissionais Especializados"
               description="Cada profissional tem sua agenda própria. Veja especialidades e escolha quem preferir."
             />
             <FeatureCard
-              icon="🔔"
+              icon=""
               title="Lembretes Automáticos"
               description="Receba avisos no WhatsApp no dia do seu agendamento e no seu aniversário."
             />
             <FeatureCard
-              icon="📱"
+              icon=""
               title="Gerencie pelo Celular"
               description="Acesse seus agendamentos, cancele ou reagende direto do seu telefone."
             />
             <FeatureCard
-              icon="✂️"
+              icon=""
               title="Serviços Personalizados"
               description="Cortes, colorações, tratamentos e muito mais. Preços e durações transparentes."
             />
             <FeatureCard
-              icon="🎁"
+              icon=""
               title="Presente de Aniversário"
               description="Cliente aniversariante ganha vantagens especiais no mês do aniversário."
             />

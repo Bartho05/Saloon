@@ -157,7 +157,7 @@ function EmployeeAppointmentCard({
 
           {appointment.client?.phone && (
             <p className="mt-2 text-sm text-gray-500">
-              📱 {formatPhone(appointment.client.phone)}
+              {formatPhone(appointment.client.phone)}
             </p>
           )}
         </div>

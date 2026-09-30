@@ -159,10 +159,10 @@ export function OwnerSettingsPage() {
       {/* Tabs */}
       <div className="flex gap-2 bg-gray-100 rounded-xl p-1 mb-6">
         {[
-          { key: 'general', label: 'Geral', icon: '⚙️' },
-          { key: 'hours', label: 'Horários', icon: '🕐' },
-          { key: 'whatsapp', label: 'WhatsApp', icon: '💬' },
-          { key: 'birthday', label: 'Aniversários', icon: '🎂' },
+          { key: 'general', label: 'Geral', icon: '' },
+          { key: 'hours', label: 'Horários', icon: '' },
+          { key: 'whatsapp', label: 'WhatsApp', icon: '' },
+          { key: 'birthday', label: 'Aniversários', icon: '' },
         ].map(tab => (
           <button
             key={tab.key}
@@ -418,7 +418,7 @@ export function OwnerSettingsPage() {
               onChange={e => setFormData(prev => ({ ...prev, birthdayMessage: e.target.value }))}
               rows={4}
               className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none font-mono text-sm"
-              placeholder="Olá {nome}! 🎂 Feliz aniversário! Venha comemorar com a gente no {salao} e ganhe um presente especial! 🎁"
+              placeholder="Olá {nome}! Feliz aniversário! Venha comemorar com a gente no {salao} e ganhe um presente especial!"
             />
           </div>
 

@@ -8,9 +8,9 @@ import { formatPhone, onlyDigits } from '@utils/validation';
 type UserType = 'client' | 'owner' | 'employee';
 
 const TABS: { key: UserType; label: string; icon: string }[] = [
-  { key: 'client', label: 'Cliente', icon: '👤' },
-  { key: 'owner', label: 'Proprietário', icon: '👑' },
-  { key: 'employee', label: 'Funcionário', icon: '💼' },
+  { key: 'client', label: 'Cliente', icon: '' },
+  { key: 'owner', label: 'Proprietário', icon: '' },
+  { key: 'employee', label: 'Funcionário', icon: '' },
 ];
 
 function CodeInput({

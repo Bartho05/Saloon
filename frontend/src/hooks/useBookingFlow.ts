@@ -37,11 +37,11 @@ const initialState: BookingState = {
 };
 
 const STEPS = [
-  { key: 'service', label: 'Serviço', icon: '✂️' },
-  { key: 'employee', label: 'Profissional', icon: '👤' },
-  { key: 'slot', label: 'Data e Hora', icon: '📅' },
-  { key: 'client', label: 'Seus Dados', icon: '📱' },
-  { key: 'confirm', label: 'Confirmar', icon: '✅' },
+  { key: 'service', label: 'Serviço', icon: '' },
+  { key: 'employee', label: 'Profissional', icon: '' },
+  { key: 'slot', label: 'Data e Hora', icon: '' },
+  { key: 'client', label: 'Seus Dados', icon: '' },
+  { key: 'confirm', label: 'Confirmar', icon: '' },
 ] as const;
 
 export { STEPS };

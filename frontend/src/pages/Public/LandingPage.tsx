@@ -16,11 +16,16 @@ const services = [
   { name: "Corte Infantil", description: "Até 12 anos, com paciência e diversão", duration: "25 min", price: 30 },
 ];
 
+/**
+ * Galeria em collage editorial: uma célula grande à esquerda (2 linhas) e
+ * três menores empilhadas à direita. Proporções fixas por posição — usar
+ * `aspect-*` dinâmico por índice deixa buracos no grid.
+ */
 const galleryImages = [
-  'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&q=80',
-  'https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=800&q=80',
-  'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=800&q=80',
-  'https://images.unsplash.com/photo-1605497788044-5a32f6c44909?w=800&q=80',
+  { src: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=900&q=80', alt: 'Interior da barbearia' },
+  { src: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=700&q=80', alt: 'Barbeiro trabalhando' },
+  { src: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=700&q=80', alt: 'Corte em andamento' },
+  { src: 'https://images.unsplash.com/photo-1567894340315-735d7c361db0?w=700&q=80', alt: 'Detalhe do acabamento' },
 ];
 
 const reviews = [
@@ -166,28 +171,42 @@ export function LandingPage() {
             </p>
           </div>
 
+          {/* Card inteiro clicável — em um site de agendamento o alvo de toque
+              precisa ser o card, não só o texto do link. */}
           <div className="grid-editorial-3">
             {services.map((service) => (
-              <Card key={service.name} variant="hover" className="group">
-                <CardContent>
-                  <div className="flex items-start justify-between mb-4">
-                    <div>
-                      <h3 className="font-display font-semibold text-body-lg">{service.name}</h3>
-                      <p className="text-caption text-brand-grayMid mt-1">{service.duration}</p>
-                    </div>
-                    <span className="font-display font-bold text-body-lg text-brand-black">
-                      R$ {service.price.toFixed(2).replace('.', ',')}
-                    </span>
-                  </div>
-                  <p className="text-body-sm text-brand-grayMid mb-6">{service.description}</p>
-                  <Link to="/agendar">
-                    <Button variant="minimal" className="group-hover:text-brand-black">
-                      Agendar este serviço
-                      <svg className="w-4 h-4 ml-1 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" /></svg>
-                    </Button>
-                  </Link>
-                </CardContent>
-              </Card>
+              <Link
+                key={service.name}
+                to="/agendar"
+                className="card-hover flex flex-col p-6 md:p-8 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-black"
+              >
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <h3 className="font-display font-semibold text-body-lg">{service.name}</h3>
+                  <span className="badge badge-muted flex-shrink-0">{service.duration}</span>
+                </div>
+
+                <p className="text-body-sm text-brand-grayMid mb-8 flex-1">{service.description}</p>
+
+                <div className="flex items-end justify-between gap-4 pt-5 border-t border-brand-gray">
+                  <span className="font-display font-bold text-display-sm leading-none">
+                    R$ {service.price.toFixed(2).replace('.', ',')}
+                  </span>
+                  <span
+                    className="btn-minimal"
+                    aria-hidden="true"
+                  >
+                    Agendar
+                    <svg
+                      className="w-4 h-4 transition-transform duration-normal group-hover:translate-x-1"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </span>
+                </div>
+              </Link>
             ))}
           </div>
 
@@ -208,11 +227,32 @@ export function LandingPage() {
             <p className="text-body-lg text-brand-grayMid">Precisão em cada detalhe</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-4">
+          {/* Collage: 1 grande (2 linhas) + 3 empilhadas à direita.
+              Alturas fixas por grid-row garantem alinhamento sem depender
+              de aspect-ratio dinâmico. */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
             {galleryImages.map((img, i) => (
-              <div key={i} className={`relative overflow-hidden aspect-${i === 0 ? 'landscape' : i === 1 ? 'portrait' : 'square'} group`}>
-                <img src={img} alt={`Trabalho MR. CUT ${i + 1}`} className="w-full h-full object-cover transition-transform duration-slow group-hover:scale-105" />
-              </div>
+              <figure
+                key={img.src}
+                className={[
+                  'group relative overflow-hidden bg-brand-gray',
+                  i === 0
+                    ? 'md:row-span-3 aspect-[4/5] md:aspect-auto md:min-h-[30rem]'
+                    : 'aspect-[16/10]',
+                ].join(' ')}
+              >
+                <img
+                  src={img.src}
+                  alt={img.alt}
+                  loading="lazy"
+                  className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 ease-sharp group-hover:scale-[1.04]"
+                />
+                <figcaption className="absolute inset-x-0 bottom-0 p-4 opacity-0 group-hover:opacity-100 transition-opacity duration-normal">
+                  <span className="text-caption text-brand-white bg-brand-black/70 px-2 py-1 inline-block">
+                    {img.alt}
+                  </span>
+                </figcaption>
+              </figure>
             ))}
           </div>
         </Container>
@@ -275,27 +315,52 @@ export function LandingPage() {
             ))}
           </div>
 
-          {/* Map placeholder */}
-          <div className="mt-16 relative aspect-landscape overflow-hidden border border-brand-gray">
-            <iframe
-              src="https://www.google.com/maps?q=Avenida+Paulista,+S%C3%A3o+Paulo+-+SP&output=embed"
-              loading="lazy"
-              referrerPolicy="no-referrer-when-downgrade"
-              className="w-full h-full aspect-landscape"
-              title="Mapa das unidades MR. CUT"
-            />
-          </div>
+          {/* Mapa — iframe do Google não renderiza em screenshots, bloqueadores
+              ou sem consentimento de cookies. O frame com cabeçalho garante
+              que mesmo vazio o bloco pareça intencional, e o link externo
+              sempre dá saída. */}
+          <figure className="mt-14 border border-brand-gray bg-brand-white">
+            <figcaption className="flex items-center justify-between gap-4 px-5 py-3 border-b border-brand-gray">
+              <span className="font-display text-caption">ONDE NOS ENCONTRAR</span>
+              <a
+                href="https://www.google.com/maps/search/?api=1&query=Avenida+Paulista,+S%C3%A3o+Paulo+-+SP"
+                target="_blank"
+                rel="noreferrer"
+                className="btn-minimal"
+              >
+                Abrir no Google Maps
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17 17 7M9 7h8v8" />
+                </svg>
+              </a>
+            </figcaption>
+            <div className="relative aspect-[21/9] bg-brand-grayLight">
+              <iframe
+                src="https://www.google.com/maps?q=Avenida+Paulista,+S%C3%A3o+Paulo+-+SP&output=embed"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                // Escala de cinza mantém o mapa dentro da paleta monocromática;
+                // no hover volta ao normal para a pessoa navegar com cores.
+                className="absolute inset-0 w-full h-full grayscale contrast-[1.05] transition-[filter] duration-normal hover:grayscale-0"
+                title="Mapa das unidades MR. CUT"
+              />
+            </div>
+          </figure>
         </Container>
       </Section>
 
       {/* CTA Final */}
-      <Section size="md" className="bg-brand-black text-brand-white">
+      <Section size="md" background="black">
         <Container>
           <div className="max-w-2xl mx-auto text-center">
             <h2 className="text-display-md md:text-display-lg mb-4">Pronto para seu melhor corte?</h2>
             <p className="text-body-lg text-brand-gray mb-8">Agende online em segundos. Escolha unidade, profissional e horário.</p>
-            <Link to="/agendar">
-              <Button size="lg" className="bg-brand-white text-brand-black hover:bg-brand-grayLight">
+            <Link to="/agendar" className="inline-block">
+              {/* Botão branco sobre seção preta. Não sobrescreve variant="solid"
+                  via className: btn-solid usa @apply (layer components) e a
+                  utility do className dispute a mesma especificidade — o
+                  vencedor depende da ordem do CSS, não da ordem do className. */}
+              <Button size="lg" className="!bg-brand-white !text-brand-black hover:!bg-brand-gray">
                 Agendar Agora
               </Button>
             </Link>

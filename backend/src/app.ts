@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Router } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -38,6 +38,25 @@ app.get('/health', (req, res) => {
 });
 
 // Rotas
+//
+// Tudo é montado sob o prefixo /api. Isso é obrigatório: o frontend é uma SPA
+// que também usa rotas /owner/*, /funcionario/*, /agendar etc. Se a API
+// respondesse na raiz, um simples F5 em /owner/funcionarios cairia no backend
+// em vez do index.html do Vite — e o usuário veria um JSON cru na tela.
+const api = Router();
+api.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+api.use('/auth', authRoutes);
+api.use('/', publicRoutes);
+api.use('/owner', ownerRoutes);
+api.use('/employee', employeeRoutes);
+api.use('/client', clientRoutes);
+
+app.use('/api', api);
+
+// Montagens na raiz existem apenas para guarda e testes diretos (curl,
+// healthcheck). O frontend NUNCA deve usar esses prefixos.
 app.use('/auth', authRoutes);
 app.use('/', publicRoutes);
 app.use('/owner', ownerRoutes);

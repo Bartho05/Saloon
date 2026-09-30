@@ -1,6 +1,13 @@
 import type { Service, Employee, Client, Appointment, TimeSlot, SalonSettings } from '@types';
 
-const API_BASE = import.meta.env.VITE_API_URL || '';
+/**
+ * Prefixo da API.
+ *
+ * Precisa ser /api (e não '') porque a SPA também tem rotas /owner/*,
+ * /funcionario/*, /agendar. Sem o prefixo, o proxy do Vite não consegue
+ * separar "página" de "API" e um F5 quebra o app.
+ */
+const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 class ApiError extends Error {
   constructor(

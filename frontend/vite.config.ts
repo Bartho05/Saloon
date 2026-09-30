@@ -22,15 +22,15 @@ export default defineConfig({
     port: 5173,
     strictPort: false,
     proxy: {
-      '/api': { target: 'http://localhost:3000', changeOrigin: true },
-      '/auth': { target: 'http://localhost:3000', changeOrigin: true },
-      '/owner': { target: 'http://localhost:3000', changeOrigin: true },
-      '/employee': { target: 'http://localhost:3000', changeOrigin: true },
-      '/client': { target: 'http://localhost:3000', changeOrigin: true },
-      '/services': { target: 'http://localhost:3000', changeOrigin: true },
-      '/employees': { target: 'http://localhost:3000', changeOrigin: true },
-      '/booking': { target: 'http://localhost:3000', changeOrigin: true },
-      '/health': { target: 'http://localhost:3000', changeOrigin: true },
+      // SOMENTE /api é encaminhado ao backend.
+      //
+      // Nunca adicione aqui /owner, /employee, /services etc: essas são
+      // também rotas de página da SPA. Com proxy em /owner, um F5 em
+      // /owner/funcionarios ia para o backend e o usuário via um JSON cru.
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
     },
   },
   build: {

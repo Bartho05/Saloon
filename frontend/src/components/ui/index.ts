@@ -7,3 +7,4 @@ export { Separator } from './Separator';
 export { Badge } from './Badge';
 export { Modal, AlertDialog } from './Modal';
 export { Toast, Toaster } from './Toast';
+export { BarChart, ProgressBar } from './Chart';

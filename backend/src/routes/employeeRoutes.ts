@@ -2,7 +2,7 @@ import { Router } from 'express';
 import * as appointmentController from '@controllers/appointmentController';
 import * as employeeController from '@controllers/employeeController';
 import { authMiddleware, employeeMiddleware } from '@middlewares/auth';
-import { uuidParamSchema, updateAppointmentStatusSchema, listAppointmentsSchema } from '@utils/validation';
+import { uuidParamSchema, updateAppointmentStatusSchema, listAppointmentsSchema, financialQuerySchema } from '@utils/validation';
 import { validateParams, validateBody, validateQuery } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
 
@@ -19,5 +19,8 @@ router.get('/appointments', validateQuery(listAppointmentsSchema), asyncHandler(
 router.get('/appointments/today', asyncHandler(appointmentController.getEmployeeTodayAppointments));
 router.get('/appointments/:id', validateParams(uuidParamSchema), asyncHandler(appointmentController.getAppointmentById));
 router.patch('/appointments/:id/status', validateParams(uuidParamSchema), validateBody(updateAppointmentStatusSchema), asyncHandler(appointmentController.updateAppointmentStatusController));
+
+// Controle financeiro do próprio funcionário
+router.get('/financial', validateQuery(financialQuerySchema), asyncHandler(employeeController.getMyFinancials));
 
 export default router;

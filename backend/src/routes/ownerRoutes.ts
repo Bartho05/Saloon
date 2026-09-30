@@ -11,8 +11,9 @@ import {
   createEmployeeSchema,
   updateEmployeeSchema,
   updateSettingsSchema,
+  financialQuerySchema,
 } from '@utils/validation';
-import { validateBody, validateParams } from '@middlewares/validate';
+import { validateBody, validateParams, validateQuery } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
 
 const router = Router();
@@ -46,5 +47,8 @@ router.patch('/settings', validateBody(updateSettingsSchema), asyncHandler(setti
 router.post('/settings/test-whatsapp', asyncHandler(settingsController.testWhatsApp));
 router.post('/settings/run-birthday-job', asyncHandler(settingsController.runBirthdayJob));
 router.post('/settings/run-reminder-job', asyncHandler(settingsController.runReminderJob));
+
+// Financeiro
+router.get('/financial', validateQuery(financialQuerySchema), asyncHandler(settingsController.getFinancialOverview));
 
 export default router;

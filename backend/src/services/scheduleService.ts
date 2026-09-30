@@ -12,6 +12,7 @@ import {
 } from '@utils/schedule';
 import { isDateBlocked, getBlockedDaysInMonth, DEFAULT_BLOCKED_CONFIG, type BlockedDateConfig } from '@utils/holidays';
 import { toSalonTimezone, startOfDayInTimezone, endOfDayInTimezone } from '@utils/date';
+import { AppError } from '@middlewares/errorHandler';
 
 export interface AvailableSlotsResult {
   slots: TimeSlot[];
@@ -187,17 +188,22 @@ export async function validateBookingSlot(
   const endsAt = addMinutesToDate(startsAt, service.durationMinutes);
   const bufferMinutes = await getBufferMinutes();
 
-  // Verifica conflitos
+  // Janela de bloqueio do novo agendamento, já com a folga applied.
+  // O mesmo buffer é aplicado nos agendamentos existentes abaixo, para que
+  // a checagem seja simétrica: [inicio, fim) + folga nos dois lados.
+  const requestedStartWithBuffer = new Date(startsAt.getTime() - bufferMinutes * 60000);
+  const requestedEndWithBuffer = new Date(endsAt.getTime() + bufferMinutes * 60000);
+
+  // Verifica conflitos considerando a janela de bloqueio (buffer).
+  // Um agendamento das 15:00 às 15:30 trava o profissional até 15:45 se o
+  // buffer for 15 min — qualquer slot que encoste nessa janela é rejeitado.
   const conflict = await prisma.appointment.findFirst({
     where: {
       employeeId,
       status: { in: ['SCHEDULED', 'COMPLETED'] },
-      OR: [
-        {
-          startsAt: { lt: endsAt },
-          endsAt: { gt: startsAt },
-        },
-      ],
+      // Sobrepõe considerando o buffer aplicado aos dois lados
+      startsAt: { lt: requestedEndWithBuffer },
+      endsAt: { gt: requestedStartWithBuffer },
     },
     include: {
       client: { select: { fullName: true } },
@@ -210,7 +216,7 @@ export async function validateBookingSlot(
     const conflictEnd = toSalonTimezone(conflict.endsAt);
     return {
       valid: false,
-      error: `Horário ocupado por ${conflict.client.fullName} (${conflict.service.name}) das ${formatTime(conflictStart)} às ${formatTime(conflictEnd)}`,
+      error: `Horário bloqueado: ${conflict.client.fullName} (${conflict.service.name}) das ${formatTime(conflictStart)} às ${formatTime(conflictEnd)}${bufferMinutes > 0 ? `, com ${bufferMinutes} min de intervalo` : ''}`,
       conflictAppointment: {
         id: conflict.id,
         startsAt: conflict.startsAt,
@@ -224,16 +230,12 @@ export async function validateBookingSlot(
   // Verifica se está dentro do horário de funcionamento
   const businessHours = await getBusinessHours();
   const daySlots = generateDaySlots(startsAt, businessHours);
-  const slotAvailable = isSlotAvailable(
-    employeeId,
-    startsAt,
-    service.durationMinutes,
-    [], // sem conflitos (já verificado acima)
-    bufferMinutes
+  const slotAvailable = daySlots.some(
+    (slot) => slot.start.getTime() === startsAt.getTime()
   );
 
   if (!slotAvailable) {
-    return { valid: false, error: 'Horário fora do expediente ou indisponível' };
+    return { valid: false, error: 'Horário fora do expediente' };
   }
 
   return { valid: true };
@@ -260,7 +262,7 @@ export async function createBooking(data: {
   });
 
   if (!service) {
-    throw new Error('Serviço não encontrado');
+    throw new AppError('Serviço não encontrado', 404, 'SERVICE_NOT_FOUND');
   }
 
   const endsAt = addMinutesToDate(startsAt, service.durationMinutes);
@@ -268,7 +270,9 @@ export async function createBooking(data: {
   // Valida slot
   const validation = await validateBookingSlot(employeeId, serviceId, startsAt);
   if (!validation.valid) {
-    throw new Error(validation.error || 'Horário não disponível');
+    // 409 = conflito de agenda. O frontend trata 409specifically mostrando
+    // "horário indisponível" e voltando ao calendário.
+    throw new AppError(validation.error || 'Horário não disponível', 409, 'SLOT_UNAVAILABLE');
   }
 
   // Find or create client
@@ -281,7 +285,11 @@ export async function createBooking(data: {
   if (!clientRecord) {
     // Novo cliente - exige nome e nascimento
     if (!client.fullName || !client.birthDate) {
-      throw new Error('Novo cliente requer nome completo e data de nascimento');
+      throw new AppError(
+        'Novo cliente requer nome completo e data de nascimento',
+        400,
+        'CLIENT_DATA_REQUIRED'
+      );
     }
 
     clientRecord = await prisma.client.create({

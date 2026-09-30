@@ -10,6 +10,7 @@ import {
 import { AppError } from '@middlewares/errorHandler';
 import { sendEmployeeAccessCode } from '@services/whatsappService';
 import { invalidateWhatsAppCache } from '@services/whatsappService';
+import { getFinancialSummary } from '@services/financialService';
 
 function generateAccessCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -282,4 +283,31 @@ export async function getEmployeeProfile(req: AuthRequest, res: Response): Promi
   });
 
   res.json({ employee });
+}
+
+/**
+ * GET /employee/financial
+ * Controle financeiro do PRÓPRIO funcionário (dia / mês / ano).
+ * O employeeId vem sempre do token — nunca da query — para que um
+ * funcionário não consiga ver o faturamento de outro.
+ */
+export async function getMyFinancials(req: AuthRequest, res: Response): Promise<void> {
+  const entity = req.userEntity;
+
+  if (!entity || !('role' in entity)) {
+    throw new AppError('Acesso restrito a funcionários', 403, 'FORBIDDEN');
+  }
+
+  const { period = 'month', reference } = req.query as {
+    period?: 'day' | 'month' | 'year';
+    reference?: Date;
+  };
+
+  const summary = await getFinancialSummary(
+    entity.id,
+    period,
+    reference ?? new Date()
+  );
+
+  res.json({ financial: summary });
 }

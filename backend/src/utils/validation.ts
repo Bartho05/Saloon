@@ -143,6 +143,12 @@ export const updateSettingsSchema = z.object({
   slotInterval: z.number().int().min(15).max(60).optional(),
 });
 
+// Financial schemas
+export const financialQuerySchema = z.object({
+  period: z.enum(['day', 'month', 'year']).default('month'),
+  reference: z.coerce.date().optional(),
+});
+
 // UUID param schema
 export const uuidParamSchema = z.object({
   id: z.string().uuid('ID inválido'),

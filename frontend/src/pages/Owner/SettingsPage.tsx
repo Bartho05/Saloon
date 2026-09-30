@@ -234,8 +234,11 @@ export function OwnerSettingsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-brand-black mb-1">Buffer entre agendamentos (min)</label>
+              <label className="block text-sm font-medium text-brand-black mb-1" htmlFor="bufferMinutes">
+                Intervalo de folga entre atendimentos (min)
+              </label>
               <input
+                id="bufferMinutes"
                 type="number"
                 value={formData.bufferMinutes}
                 onChange={e => setFormData(prev => ({ ...prev, bufferMinutes: parseInt(e.target.value) || 0 }))}
@@ -243,10 +246,17 @@ export function OwnerSettingsPage() {
                 max={60}
                 className="w-full px-4 py-3 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
               />
+              <p className="text-xs text-brand-grayMid mt-1.5">
+                Tempo que o profissional fica bloqueado <strong>após</strong> o fim de cada serviço.
+                Ex.: com 15 min, um corte das 15:00 às 15:30 trava o profissional até 15:45.
+              </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-brand-black mb-1">Intervalo de slots (min)</label>
+              <label className="block text-sm font-medium text-brand-black mb-1" htmlFor="slotInterval">
+                Intervalo entre horários oferecidos (min)
+              </label>
               <input
+                id="slotInterval"
                 type="number"
                 value={formData.slotInterval}
                 onChange={e => setFormData(prev => ({ ...prev, slotInterval: parseInt(e.target.value) || 30 }))}
@@ -255,6 +265,9 @@ export function OwnerSettingsPage() {
                 step={15}
                 className="w-full px-4 py-3 border border-brand-gray  focus:border-brand-black focus:ring-2 focus:ring-brand-black/20 outline-none"
               />
+              <p className="text-xs text-brand-grayMid mt-1.5">
+                De quanto em quanto tempo os horários aparecem para o cliente escolher.
+              </p>
             </div>
           </div>
 

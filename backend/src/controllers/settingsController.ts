@@ -5,6 +5,7 @@ import { updateSettingsSchema } from '@utils/validation';
 import { AppError } from '@middlewares/errorHandler';
 import { invalidateWhatsAppCache, testWhatsAppConfig } from '@services/whatsappService';
 import { runBirthdayJobNow, runReminderJobNow } from '@services/cronService';
+import { getOwnerFinancialOverview } from '@services/financialService';
 
 type WhatsappConfig = {
   provider?: string;
@@ -117,4 +118,22 @@ export async function runBirthdayJob(req: AuthRequest, res: Response): Promise<v
 export async function runReminderJob(req: AuthRequest, res: Response): Promise<void> {
   const result = await runReminderJobNow();
   res.json({ message: 'Job executado', ...result });
+}
+
+/**
+ * GET /owner/financial
+ * Visão consolidada do faturamento do salão, por período e por funcionário.
+ */
+export async function getFinancialOverview(req: AuthRequest, res: Response): Promise<void> {
+  const { period = 'month', reference } = req.query as {
+    period?: 'day' | 'month' | 'year';
+    reference?: Date;
+  };
+
+  const overview = await getOwnerFinancialOverview(
+    period,
+    reference ?? new Date()
+  );
+
+  res.json({ financial: overview });
 }

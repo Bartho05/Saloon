@@ -20,17 +20,13 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Tipografia display */
+  /* Tipografia base dos headings.
+     Apenas familia/cor/peso aqui — o TAMANHO e sempre explicito via classe
+     (.text-display-* ou .text-body-*). Escalar headings globais faz qualquer
+     <h3> de um card estourar para 48px. */
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display font-bold tracking-tight text-brand-black;
+    @apply font-display font-semibold tracking-tight text-brand-black;
   }
-
-  h1 { @apply text-display-xl; }
-  h2 { @apply text-display-lg; }
-  h3 { @apply text-display-md; }
-  h4 { @apply text-display-sm; }
-  h5 { @apply text-body-lg font-semibold; }
-  h6 { @apply text-body font-semibold; }
 
   /* Links */
   a {

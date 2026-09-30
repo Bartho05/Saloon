@@ -195,6 +195,10 @@ export const ownerApi = {
     request<{ sent: number; failed: number }>('/owner/settings/run-birthday-job', { method: 'POST' }),
   runReminderJob: () =>
     request<{ sent: number; failed: number }>('/owner/settings/run-reminder-job', { method: 'POST' }),
+
+  // Financeiro
+  getFinancial: (period: 'day' | 'month' | 'year') =>
+    request<{ financial: OwnerFinancialOverview }>(`/owner/financial?period=${period}`),
 };
 
 // Employee
@@ -213,6 +217,45 @@ export const employeeApi = {
       method: 'PATCH',
       body: JSON.stringify({ status, notes }),
     }),
+  getFinancials: (period: 'day' | 'month' | 'year') =>
+    request<{ financial: FinancialSummary }>(`/employee/financial?period=${period}`),
+};
+
+// Financeiro
+export interface FinancialSummary {
+  period: 'day' | 'month' | 'year';
+  range: { start: string; end: string };
+  totals: {
+    appointments: number;
+    completed: number;
+    cancelled: number;
+    noShow: number;
+    revenue: number;
+    averageTicket: number;
+  };
+  byService: Array<{ serviceId: string; name: string; count: number; revenue: number }>;
+  daily: Array<{ date: string; count: number; revenue: number }>;
+}
+
+export interface OwnerFinancialOverview {
+  period: 'day' | 'month' | 'year';
+  label: string;
+  totals: { revenue: number; appointments: number; averageTicket: number };
+  employees: Array<{
+    id: string;
+    name: string;
+    appointments: number;
+    completed: number;
+    revenue: number;
+    averageTicket: number;
+  }>;
+  byService: Array<{ name: string; count: number; revenue: number }>;
+  daily: Array<{ date: string; count: number; revenue: number }>;
+}
+
+export const financialApi = {
+  getOwnerOverview: (period: 'day' | 'month' | 'year') =>
+    request<{ financial: OwnerFinancialOverview }>(`/owner/financial?period=${period}`),
 };
 
 export { ApiError };

@@ -8,6 +8,7 @@ import {
 } from '@utils/validation';
 import { AppError } from '@middlewares/errorHandler';
 import { updateAppointmentStatus } from '@services/scheduleService';
+import { startOfSalonDay, startOfNextSalonDay } from '@utils/date';
 import { sendAppointmentCancellation, sendAppointmentConfirmation } from '@services/whatsappService';
 
 /**
@@ -22,8 +23,11 @@ export async function getAllAppointments(req: AuthRequest, res: Response): Promi
   if (employeeId) where.employeeId = employeeId;
   if (startDate || endDate) {
     where.startsAt = {};
-    if (startDate) where.startsAt.gte = new Date(startDate as string);
-    if (endDate) where.startsAt.lte = new Date(endDate as string);
+    // 'YYYY-MM-DD' é um dia civil do salão, não um instante UTC. Converter
+    // com `new Date()` cortaria o último dia do período; `startOfNextSalonDay`
+    // como limite exclusivo evita também o 23:59:59.999.
+    if (startDate) where.startsAt.gte = startOfSalonDay(startDate as string);
+    if (endDate) where.startsAt.lt = startOfNextSalonDay(endDate as string);
   }
 
   const [appointments, total] = await Promise.all([
@@ -100,8 +104,9 @@ export async function getEmployeeAppointments(req: AuthRequest, res: Response): 
   if (status) where.status = status;
   if (startDate || endDate) {
     where.startsAt = {};
-    if (startDate) where.startsAt.gte = new Date(startDate as string);
-    if (endDate) where.startsAt.lte = new Date(endDate as string);
+    // mesmo cuidado do dono: dia civil do salão, não instante UTC
+    if (startDate) where.startsAt.gte = startOfSalonDay(startDate as string);
+    if (endDate) where.startsAt.lt = startOfNextSalonDay(endDate as string);
   }
 
   const [appointments, total] = await Promise.all([

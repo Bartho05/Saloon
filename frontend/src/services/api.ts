@@ -215,12 +215,13 @@ export const clientApi = {
 // Owner
 export const ownerApi = {
   getDashboard: () => request<any>('/owner/appointments/today'),
-  getAppointments: (params?: { status?: string; startDate?: string; endDate?: string; employeeId?: string }) => {
+  getAppointments: (params?: { status?: string; startDate?: string; endDate?: string; employeeId?: string; limit?: number }) => {
     const query = new URLSearchParams();
     if (params?.status) query.set('status', params.status);
     if (params?.startDate) query.set('startDate', params.startDate);
     if (params?.endDate) query.set('endDate', params.endDate);
     if (params?.employeeId) query.set('employeeId', params.employeeId);
+    if (params?.limit) query.set('limit', String(params.limit));
     return request<{ appointments: Appointment[]; pagination: any }>(`/owner/appointments?${query}`);
   },
 

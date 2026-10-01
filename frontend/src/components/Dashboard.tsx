@@ -3,12 +3,24 @@ import { Card, CardContent, Badge as BaseBadge } from '@components/ui';
 
 type Tone = 'neutral' | 'success' | 'danger' | 'warning' | 'info';
 
+/**
+ * Badges monocromáticos.
+ *
+ * A distinção é feita por PESO, não por matiz: preto sólido > preenchimento
+ * claro > contorno sólido > contorno tracejado. Uma escada visual que se lê
+ * em cinza — funciona em tela, em impressão e para quem não distingue verde
+ * de vermelho.
+ */
 const toneClasses: Record<Tone, string> = {
-  neutral: 'bg-brand-gray text-brand-grayDark',
-  success: 'bg-green-50 text-green-800',
-  danger: 'bg-red-50 text-red-700',
-  warning: 'bg-amber-50 text-amber-800',
-  info: 'bg-brand-grayLight text-brand-black',
+  neutral: 'bg-brand-grayLight text-brand-grayDark border border-brand-gray',
+  // concluído: o estado mais forte, preto cheio
+  success: 'bg-brand-black text-brand-white border border-brand-black',
+  // cancelado: contornado — a ausência de preenchimento diz "não conta"
+  danger: 'bg-brand-white text-brand-black border border-brand-black',
+  // não compareceu: tracejado, recua
+  warning: 'bg-brand-white text-brand-grayMid border border-dashed border-brand-grayMid',
+  // agendado: preenchimento leve, ainda em aberto
+  info: 'bg-brand-gray text-brand-black border border-brand-gray',
 };
 
 export function StatusBadge({ tone, children }: { tone: Tone; children: ReactNode }) {

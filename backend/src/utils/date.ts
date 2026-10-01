@@ -1,4 +1,4 @@
-import { format, parseISO, startOfDay, endOfDay, addMinutes, addHours, isBefore, isAfter, isSameDay, setHours, setMinutes } from 'date-fns';
+import { format, parseISO, startOfDay, endOfDay, addMinutes, addHours, addDays, isBefore, isAfter, isSameDay, setHours, setMinutes } from 'date-fns';
 import { utcToZonedTime, zonedTimeToUtc } from 'date-fns-tz';
 import { env } from '@config/env';
 
@@ -131,4 +131,26 @@ export function getDaysBetween(start: Date, end: Date): Date[] {
  */
 export function getSalonTimezone(): string {
   return TIMEZONE;
+}
+
+/**
+ * Converte um dia civil 'YYYY-MM-DD' do salão no instante UTC do seu início.
+ *
+ * `new Date('2026-09-30')` NÃO serve: o construtor com string ISO sem
+ * horário interpreta como meia-noite UTC, que em São Paulo é 29/09 às 21:00.
+ * Usado em `lte`, cortava o último dia inteiro do filtro; usado em `gte`,
+ * ainda stealingava o dia anterior.
+ */
+export function startOfSalonDay(dateKey: string): Date {
+  return zonedTimeToUtc(`${dateKey}T00:00:00`, TIMEZONE);
+}
+
+/**
+ * Início do dia seguinte ao 'YYYY-MM-DD' informado, em UTC.
+ *
+ * Use como limite EXCLUSIVO (`lt`) em filtro de intervalo: evita o
+ * `23:59:59.999` que perde agendamentos com milissegundos acima disso.
+ */
+export function startOfNextSalonDay(dateKey: string): Date {
+  return addDays(startOfSalonDay(dateKey), 1);
 }

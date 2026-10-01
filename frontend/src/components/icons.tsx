@@ -44,6 +44,10 @@ export const ChevronRightIcon = ({ className }: IconProps) => (
   <svg {...base} className={className}><path d="m9 6 6 6-6 6" /></svg>
 );
 
+export const ChevronLeftIcon = ({ className }: IconProps) => (
+  <svg {...base} className={className}><path d="m15 6-6 6 6 6" /></svg>
+);
+
 export const ExternalLinkIcon = ({ className }: IconProps) => (
   <svg {...base} className={className}><path d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /></svg>
 );

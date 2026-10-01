@@ -38,7 +38,7 @@ Settings → Environment Variables → Add. Repita para cada linha da tabela.
 | `JWT_REFRESH_SECRET` | no seu `.env` local |
 | `JWT_EXPIRES_IN` | `15m` |
 | `JWT_REFRESH_EXPIRES_IN` | `15d` |
-| `NODE_ENV` | `production` |
+| `NODE_ENV` | `production` — **só em Runtime**, não em Build |
 | `FRONTEND_URL` | `https://salao-site.vercel.app` — **sem barra no final** |
 | `BACKEND_URL` | `https://salao-api.vercel.app` — **sem barra no final** |
 | `SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
@@ -60,6 +60,18 @@ Só essa. O resto do backend nunca vai para o site.
 
 Deployments → ⋮ → Redeploy. O primeiro deploy compila antes de você ter
 colado qualquer coisa, então não adianta tentar conferir antes disso.
+
+---
+
+## Se o build falhar
+
+| Mensagem | Causa | O que fazer |
+|---|---|---|
+| `Command "prisma generate" exited with 127` | `NODE_ENV=production` no estágio de **Build** | Com essa variável, o npm pula as devDependencies e o binário do `prisma` não existe. Mova a variável para **Runtime** (Settings → Environment Variables) e redeploye. |
+| `The api directory is not inside the project` | Root Directory errado | Confira se é `backend` |
+| Erro 500 em tudo ao testar | Falta alguma variável | Compare com a tabela acima |
+
+Erro 127 é "comando não encontrado" no Linux. Quase sempre é esse caso.
 
 ---
 

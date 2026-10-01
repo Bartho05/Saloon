@@ -68,7 +68,11 @@ async function findBirthdayClients(reference: Date) {
   const clients = await prisma.client.findMany({
     select: { id: true, fullName: true, phone: true, birthDate: true },
   });
-  return clients.filter((client) => isBirthdayToday(client.birthDate, reference));
+  // Cliente sem data de nascimento não tem aniversário a comemorar — antes
+  // o `1990-01-01` provisório o fazia receber mensagem todo dia 1º de janeiro.
+  return clients.filter(
+    (client) => client.birthDate !== null && isBirthdayToday(client.birthDate, reference)
+  );
 }
 
 async function findTomorrowAppointments(reference: Date) {

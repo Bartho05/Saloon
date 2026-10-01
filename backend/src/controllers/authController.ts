@@ -161,15 +161,28 @@ export async function clientVerifyCode(req: Request, res: Response): Promise<voi
   });
 
   if (!client) {
-    // Cliente novo - será completado no agendamento
-    // Por enquanto cria com dados mínimos
-    client = await prisma.client.create({
-      data: {
-        phone,
-        fullName: 'Cliente WhatsApp', // placeholder
-        birthDate: new Date('1990-01-01'), // placeholder
-      },
+    /**
+     * NÃO cria o cliente aqui.
+     *
+     * Antes este endpoint criava um registro provisório com
+     * `fullName: 'Cliente WhatsApp'` e `birthDate: 1990-01-01`, para só
+     * depois o agendamento completar os dados. Duas consequências ruins:
+     * o cadastro ficava com nome falso mesmo depois de a pessoa informar
+     * o nome dela (o campo era tratado como preenchido, então a
+     * atualização feita pelo agendamento era ignorada), e o `1990-01-01`
+     * virava a data de aniversário na mensagem automática.
+     *
+     * A tela de agendamento já coleta nome e nascimento para cliente novo,
+     * com validação no servidor. Criar aqui só produzia lixo — e foi assim
+     * que o dono se cadastrou como "Cliente WhatsApp" na própria agenda.
+     */
+    res.json({
+      client: null,
+      isNew: true,
+      accessToken: null,
+      refreshToken: null,
     });
+    return;
   }
 
   const { accessToken, refreshToken } = generateTokens({

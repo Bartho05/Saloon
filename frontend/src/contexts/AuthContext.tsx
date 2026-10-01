@@ -8,7 +8,7 @@ interface AuthContextType extends AuthState {
   loginOwner: (email: string, password: string) => Promise<void>;
   loginEmployee: (accessCode: string) => Promise<void>;
   requestClientCode: (phone: string) => Promise<string | null>;
-  verifyClientCode: (phone: string, code: string) => Promise<void>;
+  verifyClientCode: (phone: string, code: string) => Promise<{ isNewClient: boolean }>;
   logout: () => void;
   refreshAuth: () => Promise<void>;
 }
@@ -124,16 +124,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return res.code || null;
   };
 
+  /**
+   * Verifica o código do WhatsApp.
+   *
+   * Retorna `isNewClient: true` quando o telefone ainda não tem cadastro:
+   * o servidor NÃO cria um cliente provisório nesse caso (virava "Cliente
+   * WhatsApp" na agenda), e o painel do cliente precisa saber disso para
+   * mandar a pessoa criar o cadastro em vez de tentar abrir uma conta
+   * inexistente.
+   */
   const verifyClientCode = async (phone: string, code: string) => {
     const res = await authApi.clientVerifyCode(phone, code);
-    saveTokens(res.accessToken, res.refreshToken);
+
+    if (res.isNew || !res.accessToken || !res.client) {
+      return { isNewClient: true };
+    }
+
+    // `refreshToken` é null na prática quando há token, mas o tipo do
+    // servidor é `string | null`; o guard acima já garante os dois.
+    saveTokens(res.accessToken, res.refreshToken!);
     setState({
       user: res.client,
       accessToken: res.accessToken,
-      refreshToken: res.refreshToken,
+      refreshToken: res.refreshToken!,
       isAuthenticated: true,
       role: 'CLIENT',
     });
+
+    return { isNewClient: false };
   };
 
   const logout = () => {

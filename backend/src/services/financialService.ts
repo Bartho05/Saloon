@@ -42,7 +42,12 @@ export interface FinancialAppointment {
   id: string;
   startsAt: string;
   status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
-  clientName: string;
+  /**
+   * Mesmo formato do `client` das listas de agendamento, para o front
+   * aplicar a mesma regra de exibição nos dois lugares. Traz o telefone
+   * porque `fullName` pode vir vazio em cadastro incompleto.
+   */
+  client: { fullName: string; phone: string };
   employeeName: string;
   serviceName: string;
   price: number;
@@ -103,7 +108,7 @@ export async function getFinancialSummary(
       id: true,
       startsAt: true,
       status: true,
-      client: { select: { fullName: true } },
+      client: { select: { fullName: true, phone: true } },
       service: { select: { id: true, name: true, price: true } },
     },
     orderBy: { startsAt: 'asc' },
@@ -159,7 +164,10 @@ export async function getFinancialSummary(
       id: a.id,
       startsAt: a.startsAt.toISOString(),
       status: a.status,
-      clientName: a.client.fullName,
+      // Mesmo formato do `client` das listas de agendamento. Traz telefone
+      // porque cadastro incompleto tem `fullName` vazio, e sem ele a linha
+      // do relatório ficava sem nenhuma identificação.
+      client: { fullName: a.client.fullName, phone: a.client.phone },
       employeeName: '',
       serviceName: a.service.name,
       price: a.service.price ?? 0,
@@ -199,7 +207,7 @@ export async function getOwnerFinancialOverview(
       status: true,
       employee: { select: { id: true, name: true, photoUrl: true } },
       service: { select: { name: true, price: true } },
-      client: { select: { fullName: true } },
+      client: { select: { fullName: true, phone: true } },
     },
     orderBy: { startsAt: 'asc' },
   });
@@ -276,7 +284,7 @@ export async function getOwnerFinancialOverview(
       id: a.id,
       startsAt: a.startsAt.toISOString(),
       status: a.status,
-      clientName: a.client.fullName,
+      client: { fullName: a.client.fullName, phone: a.client.phone },
       employeeName: a.employee.name,
       serviceName: a.service.name,
       price: a.service.price ?? 0,

@@ -27,7 +27,8 @@ export interface AuthRequest extends Request {
         id: string;
         fullName: string;
         phone: string;
-        birthDate: Date;
+        /** null enquanto o cadastro do cliente está incompleto */
+        birthDate: Date | null;
       };
 }
 

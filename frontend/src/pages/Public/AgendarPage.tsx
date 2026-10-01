@@ -8,8 +8,9 @@ import { PhoneInput } from '@components/PhoneInput';
 import { BookingConfirmation } from '@components/BookingConfirmation';
 import { useToast } from '@contexts/ToastContext';
 import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
 import type { Service, Employee, Client } from '@types';
+import { clienteSemNome } from '@utils/client';
+import { formatBirthDate } from '@utils/date';
 import { Button, Card, CardContent, Container, Section, Input, Badge } from '@components/ui';
 
 export function AgendarPage() {
@@ -165,13 +166,24 @@ export function AgendarPage() {
       setStep4Error(null);
       try {
         const res = await bookingApi.checkClient(phone);
-        if (res.exists) {
+
+        /**
+         * Registro sem nome (ou sem nascimento) é tratado como cadastro ainda
+         * não feito, mesmo que o telefone já exista.
+         *
+         * Isso importa porque o registro incompleto existe justamente quando
+         * o telefone foi verificado por WhatsApp antes do primeiro
+         * agendamento. Cair no ramo "Seus dados já estão cadastrados" ali
+         * impedia a pessoa de informar o nome — e era assim que a agenda
+         * ficava com nome vazio para sempre. Pior: `new Date(null)` nesse
+         * cartão quebrava a tela com data inválida.
+         */
+        if (res.exists && !clienteSemNome(res.client) && res.client?.birthDate) {
           setClientExists(res.client!);
-          actions.setClientPhone(phone);
         } else {
           setClientExists(null);
-          actions.setClientPhone(phone);
         }
+        actions.setClientPhone(phone);
       } catch {
         setStep4Error('Erro ao verificar telefone. Tente novamente.');
       } finally {
@@ -204,9 +216,14 @@ export function AgendarPage() {
               </div>
               <h3 className="font-display font-bold text-display-sm">Olá, {clientExists.fullName}!</h3>
               <p className="text-body-sm text-brand-grayMid mt-2">Seus dados já estão cadastrados.</p>
-              <p className="text-caption text-brand-grayMid mt-1">
-                Nasc: {format(new Date(clientExists.birthDate), 'dd/MM/yyyy', { locale: ptBR })}
-              </p>
+              {/* `clientExists` só é setado quando nome e nascimento existem
+                  (ver handlePhoneSubmit), mas `birthDate` é anulável no tipo
+                  — sem esta guarda, um null viraria data inválida em tela. */}
+              {clientExists.birthDate && (
+                <p className="text-caption text-brand-grayMid mt-1">
+                  Nasc: {formatBirthDate(clientExists.birthDate)}
+                </p>
+              )}
               <Button variant="solid" size="lg" className="mt-6 w-full sm:w-auto" onClick={() => actions.nextStep()}>
                 Confirmar Agendamento
               </Button>
@@ -237,7 +254,11 @@ export function AgendarPage() {
         {/* Formulário novo cliente */}
         {!clientExists && state.client?.phone && (
           <form onSubmit={handleNewClientSubmit} className="space-y-4 pt-6 border-t border-brand-gray">
-            <h4 className="font-display font-medium text-body">Primeira vez por aqui? Complete seu cadastro:</h4>
+            {/* Sem "primeira vez": este formulário também aparece para quem já
+                tem telefone verificado e só falta o cadastro. */}
+            <h4 className="font-display font-medium text-body">
+              Complete seu cadastro:
+            </h4>
             <Input
               label="Nome completo"
               name="fullName"

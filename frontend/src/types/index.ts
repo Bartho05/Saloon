@@ -20,9 +20,15 @@ export interface Employee {
 
 export interface Client {
   id: string;
+  /**
+   * Vazio enquanto o cadastro está incompleto: o telefone já foi
+   * verificado, mas a pessoa ainda não informou o nome (primeiro
+   * agendamento pendente). Não é mais preenchido com um nome falso.
+   */
   fullName: string;
   phone: string;
-  birthDate: string;
+  /** null enquanto a data de nascimento não foi informada. */
+  birthDate: string | null;
   createdAt: string;
 }
 

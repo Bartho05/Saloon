@@ -136,8 +136,18 @@ export const authApi = {
       body: JSON.stringify({ phone }),
     }),
 
-  clientVerifyCode: (phone: string, code: string) =>
-    request<{ client: Client; accessToken: string; refreshToken: string }>('/auth/client/verify-code', {
+  /**
+ * `isNew: true` = telefone sem cadastro. O servidor não cria cliente aqui
+ * de propósito; o cadastro nasce no agendamento, com o nome que a pessoa
+ * digitar.
+ */
+clientVerifyCode: (phone: string, code: string) =>
+    request<{
+      client: Client | null;
+      isNew?: boolean;
+      accessToken: string | null;
+      refreshToken: string | null;
+    }>('/auth/client/verify-code', {
       method: 'POST',
       body: JSON.stringify({ phone, code }),
     }),
@@ -327,7 +337,12 @@ export interface FinancialAppointment {
   id: string;
   startsAt: string;
   status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
-  clientName: string;
+  /**
+   * Mesmo formato do `client` das listas de agendamento, para o `clientLabel`
+   * funcionar igual nos dois lugares. `fullName` pode vir vazio em cadastro
+   * incompleto — daí o telefone vir junto.
+   */
+  client: { fullName: string; phone: string };
   employeeName: string;
   serviceName: string;
   price: number;

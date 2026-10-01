@@ -83,11 +83,23 @@ export async function sendVerificationCode(data: VerificationCodeData): Promise<
 }
 
 /**
+ * Saudação das mensagens.
+ *
+ * O nome pode vir vazio: um telefone pode ter o cadastro iniciado sem já ter
+ * informado o nome. Sem esta guarda a mensagem saía "Olá !" ou "Olá undefined".
+ * "tudo bem" funciona em qualquer posição da frase.
+ */
+function greeting(name: string): string {
+  const trimmed = name?.trim();
+  return trimmed ? `Olá ${trimmed}!` : 'Olá, tudo bem?';
+}
+
+/**
  * Envia confirmação de agendamento
  */
 export async function sendAppointmentConfirmation(data: AppointmentConfirmationData): Promise<boolean> {
   const message = `✅ *Agendamento Confirmado*\n\n` +
-    `Olá ${data.clientName}!\n\n` +
+    `${greeting(data.clientName)}\n\n` +
     `Seu agendamento foi confirmado:\n` +
     `📅 ${data.dateTime}\n` +
     `✂️ ${data.serviceName}\n` +
@@ -104,7 +116,7 @@ export async function sendAppointmentConfirmation(data: AppointmentConfirmationD
  */
 export async function sendAppointmentReminder(data: AppointmentReminderData): Promise<boolean> {
   const message = `⏰ *Lembrete de Agendamento*\n\n` +
-    `Olá ${data.clientName}!\n\n` +
+    `${greeting(data.clientName)}\n\n` +
     `Seu agendamento é amanhã:\n` +
     `📅 ${data.dateTime}\n` +
     `✂️ ${data.serviceName}\n` +
@@ -120,7 +132,7 @@ export async function sendAppointmentReminder(data: AppointmentReminderData): Pr
  */
 export async function sendAppointmentCancellation(data: AppointmentCancellationData): Promise<boolean> {
   const message = `❌ *Agendamento Cancelado*\n\n` +
-    `Olá ${data.clientName},\n\n` +
+    `${greeting(data.clientName)}\n\n` +
     `Seu agendamento foi cancelado:\n` +
     `📅 ${data.dateTime}\n` +
     `✂️ ${data.serviceName}\n` +
@@ -139,7 +151,9 @@ export async function sendBirthdayMessage(data: BirthdayMessageData): Promise<bo
     'Olá {nome}! 🎂 Feliz aniversário! Venha comemorar com a gente no {salao} e ganhe um presente especial! 🎁';
 
   const message = interpolateTemplate(template, {
-    nome: data.clientName,
+    // Só chega aqui com nascimento informado (o job filtra null), mas o
+    // cadastro pode ter sido zerado no meio do caminho.
+    nome: data.clientName?.trim() || 'cliente',
     salao: data.salonName,
   });
 
@@ -171,7 +185,7 @@ export async function notifyOwnerNewBooking(
   salonName: string
 ): Promise<boolean> {
   const message = `📅 *Novo Agendamento*\n\n` +
-    `Cliente: ${clientName}\n` +
+    `Cliente: ${clientName?.trim() || 'sem cadastro'}\n` +
     `Serviço: ${serviceName}\n` +
     `Profissional: ${employeeName}\n` +
     `Data/Hora: ${dateTime}\n` +

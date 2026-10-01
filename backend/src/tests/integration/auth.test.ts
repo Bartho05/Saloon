@@ -7,7 +7,6 @@ import bcrypt from 'bcryptjs';
 describe('Auth Integration Tests', () => {
   let ownerToken: string;
   let employeeToken: string;
-  let clientToken: string;
   const ownerPassword = '123456';
 
   beforeAll(async () => {
@@ -163,24 +162,39 @@ describe('Auth Integration Tests', () => {
       }
     });
 
-    it('should verify code and return tokens for new client', async () => {
-      // Primeiro solicita código
+    it('should NOT create a client when the phone has no registration', async () => {
+      const phone = '11977774444';
       const requestRes = await request(app)
         .post('/auth/client/request-code')
-        .send({ phone: '11977774444' })
+        .send({ phone })
         .expect(200);
 
       const code = requestRes.body.code || '123456'; // Em dev vem no response
 
       const res = await request(app)
         .post('/auth/client/verify-code')
-        .send({ phone: '11977774444', code })
+        .send({ phone, code })
         .expect(200);
 
-      expect(res.body.accessToken).toBeDefined();
-      expect(res.body.refreshToken).toBeDefined();
-      expect(res.body.client.phone).toBe('11977774444');
-      clientToken = res.body.accessToken;
+      /**
+       * Telefone sem cadastro NÃO vira cliente aqui.
+       *
+       * Antes este endpoint criava um registro provisório com
+       * `fullName: 'Cliente WhatsApp'` e nascimento 1990-01-01, para o
+       * agendamento completar depois. O nome falso nunca era corrigido,
+       * porque o agendamento só gravava o nome na criação do registro — e
+       * era esse nome que aparecia na agenda do dono e do profissional. Era
+       * também como o dono acabava cadastrado como cliente na própria
+       * agenda. O cadastro nasce no primeiro agendamento, com o nome real.
+       */
+      expect(res.body.isNew).toBe(true);
+      expect(res.body.client).toBeNull();
+      expect(res.body.accessToken).toBeNull();
+      expect(res.body.refreshToken).toBeNull();
+
+      // Nenhum registro criado no banco.
+      const count = await prisma.client.count({ where: { phone } });
+      expect(count).toBe(0);
     });
 
     it('should reject invalid code', async () => {
@@ -267,25 +281,40 @@ describe('Auth Integration Tests', () => {
     });
 
     it('should return client data with client token', async () => {
-      // Cria cliente via verify-code
+      const phone = '11977776666';
+
+      // O cadastro precisa existir com nome e nascimento reais: verify-code
+      // não cria cliente (ver teste acima), e um registro incompleto não
+      // tem o que ser devolvido em /auth/me.
+      await prisma.client.create({
+        data: {
+          phone,
+          fullName: 'Cliente Autenticado',
+          birthDate: new Date('1991-07-14'),
+        },
+      });
+
       const requestRes = await request(app)
         .post('/auth/client/request-code')
-        .send({ phone: '11977776666' })
+        .send({ phone })
         .expect(200);
 
       // Usa o código que a API devolveu, e não um fixo: fora de produção o
       // código é aleatório e '123456' quase nunca é o válido.
       const verifyRes = await request(app)
         .post('/auth/client/verify-code')
-        .send({ phone: '11977776666', code: requestRes.body.code })
+        .send({ phone, code: requestRes.body.code })
         .expect(200);
+
+      expect(verifyRes.body.accessToken).toBeTruthy();
 
       const res = await request(app)
         .get('/auth/me')
         .set('Authorization', `Bearer ${verifyRes.body.accessToken}`)
         .expect(200);
 
-      expect(res.body.client.phone).toBe('11977776666');
+      expect(res.body.client.phone).toBe(phone);
+      expect(res.body.client.fullName).toBe('Cliente Autenticado');
     });
 
     it('should reject request without token', async () => {

@@ -18,6 +18,21 @@ export function formatDate(date: Date | string): string {
 }
 
 /**
+ * Data de nascimento, vinda do banco ou do formulário como "YYYY-MM-DD".
+ *
+ * Precisa de parse próprio porque `new Date('1993-08-21')` é interpretado
+ * como meia-noite **UTC**: exibido no fuso do salão (America/Sao_Paulo,
+ * UTC-3) saía 20/08/1993 — um dia antes do que a pessoa digitou. Para data
+ * de nascimento isso não é detalhe de layout, é o dia errado.
+ *
+ * `parseISO` devolve meia-noite **local** para data sem hora, que é o que
+ * se quer aqui.
+ */
+export function formatBirthDate(birthDate: string): string {
+  return format(parseISO(birthDate), 'dd/MM/yyyy', { locale: ptBR });
+}
+
+/**
  * Formata apenas hora (HH:mm)
  */
 export function formatTime(date: Date | string): string {

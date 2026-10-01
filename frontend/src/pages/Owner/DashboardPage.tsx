@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ownerApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatDateTime, formatCurrency } from '@utils/date';
+import { clientLabel } from '@utils/client';
 import type { Appointment, Service, Employee } from '@types';
 import { Card, Button, Container } from '@components/ui';
 import { PageHeader, StatCard, StatusBadge, EmptyState, PageSpinner } from '@components/Dashboard';
@@ -131,7 +132,7 @@ export function OwnerDashboardPage() {
               >
                 <div className="min-w-0">
                   <p className="font-display font-medium text-body">
-                    {apt.client?.fullName || 'Cliente'}
+                    {clientLabel(apt.client)}
                   </p>
                   <p className="text-body-sm text-brand-grayMid mt-1">
                     {formatDateTime(apt.startsAt).split(' ')[1]} &middot; {apt.service?.name} &middot; {apt.employee?.name}

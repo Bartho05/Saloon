@@ -1,6 +1,7 @@
 import type { Appointment } from '@types';
 import { formatDateTime, formatCurrency } from '@utils/date';
 import { formatPhone } from '@utils/validation';
+import { clientLabel, clienteSemNome } from '@utils/client';
 import { StatusBadge } from '@components/Dashboard';
 import { CheckIcon, CloseIcon, AlertIcon } from '@components/icons';
 
@@ -90,13 +91,17 @@ export function AppointmentCard({
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2.5 flex-wrap">
           <h3 className="font-display font-medium text-body">
-            {appointment.client?.fullName || 'Cliente'}
+            {clientLabel(appointment.client)}
           </h3>
           {overdue && <span className="badge badge-muted">Atrasado</span>}
         </div>
         <p className="text-body-sm text-brand-grayMid truncate mt-0.5">
           {appointment.service?.name}
-          {appointment.client?.phone ? ` · ${formatPhone(appointment.client.phone)}` : ''}
+          {/* Sem nome cadastrado o título já mostra o telefone; repetir aqui
+              sairia "Corte · (31) 99999-9999" duas vezes na mesma linha. */}
+          {!clienteSemNome(appointment.client) && appointment.client?.phone
+            ? ` · ${formatPhone(appointment.client.phone)}`
+            : ''}
         </p>
         {!compactTime && (
           <p className="text-caption text-brand-grayMid mt-0.5">
@@ -149,7 +154,7 @@ export function AppointmentCard({
                   onClick={() => onStatusChange?.(appointment, status)}
                   disabled={updating}
                   title={meta.label}
-                  aria-label={`${meta.label} — agendamento de ${appointment.client?.fullName || 'cliente'}`}
+                  aria-label={`${meta.label} — agendamento de ${clientLabel(appointment.client)}`}
                   className="p-2.5 text-brand-grayMid hover:text-brand-black hover:bg-brand-white border border-transparent hover:border-brand-gray transition-colors duration-fast disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   <Icon className="w-4 h-4" />

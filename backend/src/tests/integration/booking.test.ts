@@ -304,6 +304,96 @@ describe('Booking Integration Tests', () => {
 
       expect(res.body.error).toContain('nome completo');
     });
+
+    /**
+     * Regressão do bug do "Cliente WhatsApp".
+     *
+     * O telefone pode ter registro criado pela verificação por WhatsApp, sem
+     * nome nem nascimento. Antes esse registro era tratado como cliente
+     * pronto: o agendamento aceitava a chamada sem nome e o nome ficava
+     * vazio (ou o placeholder) na agenda do dono e do profissional para
+     * sempre, sem caminho para corrigir. Agora cadastro incompleto exige
+     * nome e nascimento, mesmo com o registro já existindo.
+     */
+    it('should require name and birthDate for an incomplete existing record', async () => {
+      // Telefone verificado por WhatsApp: registro existe, cadastro não.
+      await prisma.client.create({
+        data: { phone: '11955550001', fullName: '', birthDate: null },
+      });
+
+      const semDados = await request(app)
+        .post('/booking/create')
+        .send({
+          serviceId,
+          employeeId,
+          startsAt,
+          client: { phone: '11955550001' }, // sem nome e nascimento
+        })
+        .expect(400);
+
+      expect(semDados.body.code).toBe('CLIENT_DATA_REQUIRED');
+
+      // E o registro continua incompleto: nada foi inventado.
+      const aindaIncompleto = await prisma.client.findUnique({
+        where: { phone: '11955550001' },
+      });
+      expect(aindaIncompleto?.fullName).toBe('');
+      expect(aindaIncompleto?.birthDate).toBeNull();
+    });
+
+    it('should fill an incomplete existing record with the typed name', async () => {
+      await prisma.client.create({
+        data: { phone: '11955550002', fullName: '', birthDate: null },
+      });
+
+      const res = await request(app)
+        .post('/booking/create')
+        .send({
+          serviceId,
+          employeeId,
+          startsAt,
+          client: {
+            phone: '11955550002',
+            fullName: 'Maria Nome Digitado',
+            birthDate: '1992-04-05',
+          },
+        })
+        .expect(201);
+
+      expect(res.body.client.fullName).toBe('Maria Nome Digitado');
+
+      const gravado = await prisma.client.findUnique({
+        where: { phone: '11955550002' },
+      });
+      expect(gravado?.fullName).toBe('Maria Nome Digitado');
+      expect(gravado?.birthDate?.toISOString().slice(0, 10)).toBe('1992-04-05');
+    });
+
+    it('should never write a placeholder name', async () => {
+      /**
+       * Trava a regressão na origem: nenhum caminho pode gravar
+       * "Cliente WhatsApp". Se alguém reintroduzir o placeholder, este
+       * teste quebra em vez do bug voltar silenciosamente.
+       */
+      const res = await request(app)
+        .post('/booking/create')
+        .send({
+          serviceId,
+          employeeId,
+          startsAt,
+          client: {
+            phone: '11955550003',
+            fullName: '  Nome Com Espacos  ',
+            birthDate: '1992-04-05',
+          },
+        })
+        .expect(201);
+
+      expect(res.body.client.fullName).toBe('Nome Com Espacos');
+
+      const todos = await prisma.client.findMany({ select: { fullName: true } });
+      expect(todos.map((c) => c.fullName)).not.toContain('Cliente WhatsApp');
+    });
   });
 
   describe('Client appointments flow', () => {

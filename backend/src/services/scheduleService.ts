@@ -300,9 +300,20 @@ export async function createBooking(data: {
 
   let isNewClient = false;
 
-  if (!clientRecord) {
-    // Novo cliente - exige nome e nascimento
-    if (!client.fullName || !client.birthDate) {
+  /**
+   * Cadastro incompleto = nome vazio OU nascimento null.
+   *
+   * Esses dois casos exigem nome e nascimento, mesmo que o registro já
+   * exista (telefone verificado por WhatsApp, por exemplo). Sem esta
+   * checagem um cadastro placeholder sobrevivia para sempre: o nome só era
+   * gravado na criação, e "Cliente WhatsApp" continuava aparecendo na
+   * agenda mesmo depois de a pessoa informar o nome dela.
+   */
+  const cadastroIncompleto =
+    !clientRecord || !clientRecord.fullName?.trim() || !clientRecord.birthDate;
+
+  if (cadastroIncompleto) {
+    if (!client.fullName?.trim() || !client.birthDate) {
       throw new AppError(
         'Novo cliente requer nome completo e data de nascimento',
         400,
@@ -310,23 +321,41 @@ export async function createBooking(data: {
       );
     }
 
-    clientRecord = await prisma.client.create({
-      data: {
-        phone: client.phone,
-        fullName: client.fullName,
-        birthDate: new Date(client.birthDate),
-      },
-    });
-    isNewClient = true;
-  } else if (client.fullName || client.birthDate) {
-    // Atualiza dados se fornecidos
+    if (!clientRecord) {
+      clientRecord = await prisma.client.create({
+        data: {
+          phone: client.phone,
+          fullName: client.fullName.trim(),
+          birthDate: new Date(client.birthDate),
+        },
+      });
+      isNewClient = true;
+    } else {
+      // Preenche o que falta; o que já existe e foi reenviado é atualizado.
+      clientRecord = await prisma.client.update({
+        where: { id: clientRecord.id },
+        data: {
+          fullName: client.fullName.trim(),
+          birthDate: new Date(client.birthDate),
+        },
+      });
+      isNewClient = true;
+    }
+  } else if (clientRecord && (client.fullName?.trim() || client.birthDate)) {
+    // Cadastro completo: atualiza o que a pessoa mudou.
     clientRecord = await prisma.client.update({
       where: { id: clientRecord.id },
       data: {
-        ...(client.fullName && { fullName: client.fullName }),
+        ...(client.fullName?.trim() && { fullName: client.fullName.trim() }),
         ...(client.birthDate && { birthDate: new Date(client.birthDate) }),
       },
     });
+  }
+
+  // Impossível chegar aqui sem cliente: os dois ramos acima sempre criam ou
+  // atualizam o registro, ou lançam CLIENT_DATA_REQUIRED.
+  if (!clientRecord) {
+    throw new AppError('Cliente inválido', 400, 'CLIENT_DATA_REQUIRED');
   }
 
   // Cria agendamento

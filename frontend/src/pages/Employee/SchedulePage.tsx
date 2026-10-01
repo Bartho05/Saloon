@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { employeeApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatTodayLong } from '@utils/date';
+import { clientLabel } from '@utils/client';
 import type { Appointment } from '@types';
 import { Container, Card, CardContent, Button } from '@components/ui';
 import { PageHeader, EmptyState, PageSpinner, StatusBadge } from '@components/Dashboard';
@@ -270,7 +271,7 @@ export function EmployeeSchedulePage() {
                               : 'Não compareceu'}
                       </StatusBadge>
                     </div>
-                    <p className="text-body-sm mt-2">{apt.client?.fullName || 'Cliente'}</p>
+                    <p className="text-body-sm mt-2">{clientLabel(apt.client)}</p>
                     <p className="text-caption text-brand-grayMid mt-0.5">{apt.service?.name}</p>
                   </li>
                 ))}

@@ -152,7 +152,26 @@ export function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      await verifyClientCode(phone, code);
+      const { isNewClient } = await verifyClientCode(phone, code);
+
+      if (isNewClient) {
+        // Telefone sem cadastro. Não existe conta para abrir ainda — o
+        // cadastro é criado no primeiro agendamento, com o nome que a
+        // pessoa digitar. Antes disso o servidor criava um registro
+        // provisório chamado "Cliente WhatsApp".
+        setError('');
+        setDevCode(null);
+        setCode('');
+        setStep('phone');
+        showToast({
+          type: 'info',
+          title: 'Cadastro não encontrado',
+          message: 'Faça seu primeiro agendamento para criar o cadastro.',
+        });
+        navigate('/agendar', { replace: true });
+        return;
+      }
+
       showToast({ type: 'success', title: 'Login realizado com sucesso!' });
       navigate(from || '/meus-agendamentos', { replace: true });
     } catch (err: any) {

@@ -1,5 +1,6 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatBirthDate } from '@utils/date';
 import type { TimeSlot } from '@utils/schedule';
 import type { Service, Employee, Client } from '@types';
 import { Button, Card, CardContent, Badge, Separator } from '@components/ui';
@@ -81,7 +82,10 @@ export function BookingConfirmation({
               <dd className="text-body-sm text-brand-grayMid">{formatPhone(client.phone)}</dd>
               {client.birthDate && (
                 <dd className="text-body-sm text-brand-grayMid">
-                  Nasc: {format(new Date(client.birthDate), 'dd/MM/yyyy', { locale: ptBR })}
+                  {/* `formatBirthDate`, não `new Date(...)`: "1993-08-21" é
+                      interpretado como meia-noite UTC e exibido em São Paulo
+                      (UTC-3) como 20/08/1993 — um dia antes do digitado. */}
+                  Nasc: {formatBirthDate(client.birthDate)}
                 </dd>
               )}
               {isNewClient && (

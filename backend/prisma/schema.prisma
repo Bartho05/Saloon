@@ -47,9 +47,13 @@ model User {
 
 model Client {
   id           String         @id @default(uuid())
+  /// Vazio enquanto a pessoa não preencheu o cadastro (primeiro agendamento
+  /// pendente). Antes era "Cliente WhatsApp", que aparecia como nome na agenda.
   fullName     String
   phone        String         @unique
-  birthDate    DateTime
+  /// Anulável: quem ainda não informou a data de nascimento.
+  /// O job de aniversário ignora quem é null.
+  birthDate    DateTime?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 

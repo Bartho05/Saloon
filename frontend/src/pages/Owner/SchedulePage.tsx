@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { ownerApi, employeesApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatCurrency as fmtCurrency } from '@utils/date';
+import { clientLabel } from '@utils/client';
 import type { Appointment, Employee } from '@types';
 import { Button, Input, Select, Container, Card, CardContent } from '@components/ui';
 import { PageHeader, StatusBadge, EmptyState, PageSpinner } from '@components/Dashboard';
@@ -244,7 +245,7 @@ export function OwnerSchedulePage() {
 
                     <div className="flex-1 min-w-0">
                       <p className="font-display font-medium text-body truncate">
-                        {apt.client?.fullName || 'Cliente'}
+                        {clientLabel(apt.client)}
                       </p>
                       <p className="text-body-sm text-brand-grayMid truncate">
                         {apt.service?.name}
@@ -366,7 +367,7 @@ export function OwnerSchedulePage() {
                           {STATUS_LABEL[apt.status]}
                         </StatusBadge>
                       </div>
-                      <p className="text-body-sm mt-2">{apt.client?.fullName || 'Cliente'}</p>
+                      <p className="text-body-sm mt-2">{clientLabel(apt.client)}</p>
                       <p className="text-caption text-brand-grayMid mt-0.5">
                         {apt.service?.name} &middot; {apt.employee?.name}
                       </p>

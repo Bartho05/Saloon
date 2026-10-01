@@ -3,6 +3,7 @@ import { ownerApi } from '@services/api';
 import type { OwnerFinancialOverview } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatCurrency } from '@utils/date';
+import { clientLabel } from '@utils/client';
 import { Card, CardContent, Container, BarChart, ProgressBar } from '@components/ui';
 import { PageHeader, StatCard, PageSpinner, EmptyState, StatusBadge } from '@components/Dashboard';
 import { PeriodSelector, type Period } from '@components/PeriodSelector';
@@ -206,7 +207,7 @@ export function OwnerFinancialPage() {
 
                   <div className="flex-1 min-w-0">
                     <p className="font-display font-medium text-body-sm truncate">
-                      {apt.clientName}
+                      {clientLabel(apt.client)}
                     </p>
                     <p className="text-caption text-brand-grayMid truncate mt-0.5">
                       {apt.serviceName} &middot; {apt.employeeName}

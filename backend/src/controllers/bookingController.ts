@@ -38,7 +38,8 @@ export async function checkClient(req: AuthRequest, res: Response): Promise<void
       exists: true,
       client: {
         ...client,
-        birthDate: client.birthDate.toISOString().split('T')[0],
+        // null = cadastro iniciado mas ainda sem data de nascimento
+        birthDate: client.birthDate ? client.birthDate.toISOString().split('T')[0] : null,
       },
     });
   } else {

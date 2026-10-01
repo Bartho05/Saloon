@@ -15,6 +15,50 @@ import path from 'path';
 const envTest =
   dotenv.config({ path: path.resolve(__dirname, '.env.test') }).parsed ?? {};
 
+/**
+ * Falha com instrução, e não com erro de biblioteca.
+ *
+ * Sem `.env.test`, o primeiro erro visível é do Prima: "Invalid value undefined
+ * for datasource db", em `src/config/database.ts:21`, em todas as nove suítes de
+ * uma vez. Quem acabou de clonar o repositório não tem como ligar aquilo a "crie
+ * o .env.test" — parece bug de configuração do projeto, e o primeiro impulso é
+ * procurar no código.
+ *
+ * Aqui a mensagem diz o que fazer. E é uma falha de verdade, não um aviso: os
+ * testes rodam `deleteMany` em dados de serviço, e sem saber qual banco é o
+ * destino, rodar é mais perigoso do que não rodar.
+ */
+if (!envTest.DATABASE_URL) {
+  throw new Error(
+    [
+      '',
+      '════════════════════════════════════════════════════════════════',
+      ' FALTANDO O ARQUIVO .env.test',
+      '',
+      ' Os testes precisam de um .env.test apontando para o schema `test`.',
+      ' Sem ele, nenhum teste roda — de propósito: eles apagam dados de',
+      ' serviço, e sem saber qual banco é o destino, rodar seria perigoso.',
+      '',
+      ' Para criar:',
+      '',
+      '   cp .env.example .env.test     # Linux/macOS',
+      '   copy .env.example .env.test   # Windows',
+      '',
+      ' Depois ajuste DUAS linhas no arquivo criado:',
+      '',
+      '   DATABASE_URL  ->  schema=test    (o `public` é o banco de verdade)',
+      '   NODE_ENV      ->  test',
+      '',
+      ' E aplique as migrations nesse schema uma vez:',
+      '',
+      '   npx prisma migrate deploy',
+      '',
+      '════════════════════════════════════════════════════════════════',
+      '',
+    ].join('\n')
+  );
+}
+
 export default defineConfig({
   test: {
     environment: 'node',

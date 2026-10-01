@@ -4,6 +4,7 @@ import { Section, Container, Card, CardContent, Badge, Button, Separator } from 
 import { servicesApi } from '@services/api';
 import { formatPhone } from '@utils/validation';
 import { useSalon } from '@contexts/SalonContext';
+import { DevCredits } from '@components/DevCredits';
 
 /**
  * Galeria em collage editorial: uma célula grande à esquerda (2 linhas) e
@@ -100,7 +101,7 @@ export function LandingPage() {
         {/* Serviços em destaque — mesmos dados do banco */}
         <div className="border-t border-brand-gray mt-16 md:mt-24">
           <Container>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 py-12 md:py-16">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-8 py-12 md:py-16">
               {[
                 { value: servicos.length > 0 ? String(servicos.length) : '—', label: 'Serviços' },
                 {
@@ -115,9 +116,23 @@ export function LandingPage() {
                   label: 'Aberto por semana',
                 },
               ].map((stat) => (
-                <div key={stat.label} className="text-center border-l border-brand-gray first:border-0 pl-8 first:pl-0">
-                  <p className="font-display font-bold text-display-lg md:text-display-xl">{stat.value}</p>
-                  <p className="text-caption text-brand-grayMid mt-1">{stat.label}</p>
+                <div
+                  key={stat.label}
+                  className="min-w-0 border-l border-brand-gray first:border-0 pl-6 first:pl-0"
+                >
+                  {/* Rótulo ANTES do valor, alinhado à esquerda.
+                      Centralizado com telefone de 14 caracteres a 30px
+                      quebrava em duas linhas desalinhadas; à esquerda cabe
+                      numa linha e a coluna não invade a vizinha. */}
+                  <p className="text-caption uppercase tracking-wider text-brand-grayMid">
+                    {stat.label}
+                  </p>
+                  {/* base / sm. A 30px o telefone (14 caracteres) e o
+                      horário (14) não cabem em ~190px de coluna e saíam
+                      em reticências; 18px/24px cabem folgados. */}
+                  <p className="font-display font-semibold text-lg sm:text-xl mt-2 tabular-nums truncate">
+                    {stat.value}
+                  </p>
                 </div>
               ))}
             </div>
@@ -407,6 +422,7 @@ export function LandingPage() {
           <p className="text-caption text-brand-grayMid text-center">
             © {new Date().getFullYear()} {nome}. Todos os direitos reservados.
           </p>
+          <DevCredits className="mt-2" />
         </Container>
       </footer>
     </div>

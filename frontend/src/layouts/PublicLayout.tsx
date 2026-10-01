@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { SiteHeader } from '@components/SiteHeader';
 import { Container } from '@components/ui';
 import { SalonBrand } from '@components/SalonBrand';
+import { DevCredits } from '@components/DevCredits';
 import { useSalonName } from '@contexts/SalonContext';
 
 export function PublicLayout() {
@@ -28,6 +29,7 @@ export function PublicLayout() {
               </p>
             )}
           </div>
+          <DevCredits className="mt-4" />
         </Container>
       </footer>
     </div>

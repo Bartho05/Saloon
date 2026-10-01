@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '@components/Sidebar';
 import { SalonBrand } from '@components/SalonBrand';
+import { DevCredits } from '@components/DevCredits';
 import { useAuth } from '@hooks/useAuth';
 
 interface DashboardLayoutProps {
@@ -72,6 +73,11 @@ export function DashboardLayout({ variant }: DashboardLayoutProps) {
         <main className="p-4 md:p-6 lg:p-8 xl:p-10">
           <Outlet />
         </main>
+
+        {/* Créditos do desenvolvedor — mesma assinatura em todos os painéis */}
+        <footer className="px-4 md:px-6 lg:px-8 xl:px-10 pb-8">
+          <DevCredits tone="aside" />
+        </footer>
       </div>
     </div>
   );

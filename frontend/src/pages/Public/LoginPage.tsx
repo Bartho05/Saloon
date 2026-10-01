@@ -7,6 +7,7 @@ import { formatPhone, onlyDigits } from '@utils/validation';
 import { Button, Card, CardContent, Container, Section, Input, Separator } from '@components/ui';
 import { Spinner } from '@components/Dashboard';
 import { SalonBrand } from '@components/SalonBrand';
+import { DevCredits } from '@components/DevCredits';
 
 type UserType = 'client' | 'owner' | 'employee';
 
@@ -367,6 +368,7 @@ export function LoginPage() {
             <p className="text-caption text-brand-grayMid text-center">
               Agendamento online
             </p>
+            <DevCredits className="mt-3" />
           </CardContent>
         </Card>
         )}

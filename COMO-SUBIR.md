@@ -58,22 +58,23 @@ outro problema.
 3. Configure:
    - **Root Directory:** `backend`
    - **Framework Preset:** Other
-   - **Build Command:** `prisma generate`
+   - **Build Command:** deixe **VAZIO**
    - **Install Command:** deixe em branco (o padrão já funciona)
 4. **Deploy**
 
 Pronto. A API fica em `https://SEU-PROJETO.vercel.app`.
 
-**Não precisa de `NODE_ENV=production` no build.** O Vercel já define isso. E
-definir de novo quebra o build: com `NODE_ENV=production`, o npm pula as
-devDependencies, e o binário do `prisma` — que fica lá — simplesmente não
-existe. O erro é `Command "prisma generate" exited with 127`, que é "comando
-não encontrado" em Linux.
+**O Build Command fica vazio de propósito.** O `postinstall` do projeto já
+roda `prisma generate` no fim de todo `npm install`, então o Prisma Client já
+está gerado antes do build começar. Se o Vercel exigir algum comando ali,
+use `npx prisma generate` — o `npx` encontra o binário sem depender do PATH
+do shell.
 
-O `NODE_ENV=production` continuaindo na lista de variáveis, mas só para
-**Runtime**, e serve para o sistema saber que está em produção. Se o build
-falhar com 127, o motivo é ter colocado a variável no estágio errado, ou tê-la
-removido.
+**`NODE_ENV=production` só em Runtime, nunca em Build.** Com essa variável no
+Build, o npm pula as devDependencies e o binário do `prisma` não é instalado.
+
+Se o build reclamar, o passo a passo dos erros está em
+`backend/BUILD-VERCEL.md`.
 
 Teste: `https://SEU-PROJETO.vercel.app/api/health` tem que responder
 `{"status":"ok"}`. **Se der 404, a pasta `backend/api/index.ts` não foi

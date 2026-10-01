@@ -67,7 +67,7 @@ colado qualquer coisa, então não adianta tentar conferir antes disso.
 
 | Mensagem | Causa | O que fazer |
 |---|---|---|
-| `Command "prisma generate" exited with 127` | `NODE_ENV=production` no estágio de **Build** | Com essa variável, o npm pula as devDependencies e o binário do `prisma` não existe. Mova a variável para **Runtime** (Settings → Environment Variables) e redeploye. |
+| `Command "prisma generate" exited with 127` | `NODE_ENV=production` no estágio de **Build**, que faz o npm pular as devDependencies | Mova a variável para **Runtime** e deixe o Build Command **vazio** — o `postinstall` já gera o client. Detalhes em `backend/BUILD-VERCEL.md` |
 | `The api directory is not inside the project` | Root Directory errado | Confira se é `backend` |
 | Erro 500 em tudo ao testar | Falta alguma variável | Compare com a tabela acima |
 

@@ -17,7 +17,6 @@ import {
   listAppointmentsSchema,
   updateSettingsSchema,
   financialQuerySchema,
-  employeeSalonInfoSchema,
   uuidParamSchema,
 } from '@utils/validation';
 
@@ -408,35 +407,14 @@ describe('Validation Schemas', () => {
     });
   });
 
-  describe('employeeSalonInfoSchema', () => {
-    it('should accept identity fields', () => {
-      const result = employeeSalonInfoSchema.parse({
-        name: 'Salão Beleza',
-        phone: '31971192468',
-        email: 'contato@salon.com.br',
-        address: 'Rua das Acácias, 100',
-        description: 'Um texto curto.',
-      });
-      expect(result.name).toBe('Salão Beleza');
-    });
-
-    it('should strip operational fields the employee must not change', () => {
-      // O schema não declara bufferMinutes/slotInterval/businessHours, então
-      // o zod os descarta. É isso que impede o funcionário de mexer na
-      // operação do salão — o teste trava esse contrato.
-      const result = employeeSalonInfoSchema.parse({
-        name: 'Salão Beleza',
-        bufferMinutes: 99,
-        slotInterval: 120,
-        cancellationHours: 48,
-      });
-      expect(result).not.toHaveProperty('bufferMinutes');
-      expect(result).not.toHaveProperty('slotInterval');
-      expect(result).not.toHaveProperty('cancellationHours');
-    });
-
-    it('should require the salon name', () => {
-      expect(() => employeeSalonInfoSchema.parse({ name: '' })).toThrow();
+  describe('acesso aos dados do salão', () => {
+    it('não deve existir schema de edição de salão para o funcionário', async () => {
+      // O funcionário perdeu o acesso aos dados do salão: nome, endereço e
+      // horário são do proprietário, não de cada profissional. Este teste
+      // trava a remoção — se alguém recriar o schema, ele volta a permitir
+      // mexer na operação do salão inteiro.
+      const validation = await import('@utils/validation');
+      expect('employeeSalonInfoSchema' in validation).toBe(false);
     });
   });
 

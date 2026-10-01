@@ -47,9 +47,20 @@ export const CardDescription = forwardRef<HTMLParagraphElement, HTMLAttributes<H
 );
 CardDescription.displayName = 'CardDescription';
 
+/**
+ * Corpo do card, COM respiro.
+ *
+ * Antes não tinha padding nenhum e o conteúdo encostava na borda — notável
+ * no Perfil, onde o divisor e a lista de informações ficavam colados no
+ * outline do card. O padding é padrão aqui e não em `Card`: quem escreve
+ * o corpo não deveria ter que lembrar de afastar o texto da borda.
+ *
+ * Usado dentro de `<Card variant="padded">` daria padding em dobro; por
+ * isso essas chamadas migraram para `<Card>`.
+ */
 export const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (
-    <div ref={ref} className={className} {...props} />
+    <div ref={ref} className={`p-5 md:p-6 ${className}`} {...props} />
   )
 );
 CardContent.displayName = 'CardContent';

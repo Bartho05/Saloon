@@ -114,7 +114,7 @@ export function AgendarPage() {
               tabIndex={0}
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); actions.setEmployee(emp); } }}
             >
-              <CardContent className="flex items-center gap-4 p-4 md:p-6">
+              <CardContent className="flex items-center gap-4">
                 <div className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-grayLight border border-brand-gray flex items-center justify-center overflow-hidden flex-shrink-0">
                   {emp.photoUrl ? (
                     <img

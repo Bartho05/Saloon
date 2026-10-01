@@ -10,7 +10,6 @@ import {
   UserIcon,
   LogoutIcon,
   WalletIcon,
-  MapPinIcon,
 } from '@components/icons';
 
 interface SidebarProps {
@@ -18,27 +17,59 @@ interface SidebarProps {
   onNavigate?: () => void;
 }
 
-const ownerMenu = [
-  { label: 'Dashboard', href: '/owner/dashboard', icon: HomeIcon },
-  { label: 'Serviços', href: '/owner/servicos', icon: ScissorsIcon },
-  { label: 'Funcionários', href: '/owner/funcionarios', icon: UsersIcon },
-  { label: 'Agenda', href: '/owner/agenda', icon: CalendarIcon },
-  { label: 'Financeiro', href: '/owner/financeiro', icon: WalletIcon },
-  { label: 'Configurações', href: '/owner/configuracoes', icon: SettingsIcon },
+type MenuItem = { label: string; href: string; icon: typeof HomeIcon };
+type MenuGroup = { title: string; items: MenuItem[] };
+
+/**
+ * O DONO também é funcionário — ele atende, tem agenda e faturamento
+ * próprios. Por isso a sidebar dele é dividida em dois blocos: o salão
+ * (gestão) e ele como profissional (o mesmo conjunto de telas que o
+ * funcionário tem). São as mesmas páginas, sob um segundo conjunto de URL.
+ */
+const ownerMenu: MenuGroup[] = [
+  {
+    title: 'Salão',
+    items: [
+      { label: 'Dashboard', href: '/owner/dashboard', icon: HomeIcon },
+      { label: 'Serviços', href: '/owner/servicos', icon: ScissorsIcon },
+      { label: 'Funcionários', href: '/owner/funcionarios', icon: UsersIcon },
+      { label: 'Agenda', href: '/owner/agenda', icon: CalendarIcon },
+      { label: 'Financeiro', href: '/owner/financeiro', icon: WalletIcon },
+      { label: 'Configurações', href: '/owner/configuracoes', icon: SettingsIcon },
+    ],
+  },
+  {
+    title: 'Como profissional',
+    items: [
+      { label: 'Minha Agenda', href: '/owner/minha-agenda', icon: CalendarIcon },
+      { label: 'Meus Agendamentos', href: '/owner/meus-agendamentos', icon: ListIcon },
+      { label: 'Meu Faturamento', href: '/owner/meu-faturamento', icon: WalletIcon },
+      { label: 'Meu Perfil', href: '/owner/meu-perfil', icon: UserIcon },
+    ],
+  },
 ];
 
-const employeeMenu = [
-  { label: 'Minha Agenda', href: '/funcionario/agenda', icon: CalendarIcon },
-  { label: 'Agendamentos', href: '/funcionario/agendamentos', icon: ListIcon },
-  { label: 'Meu Faturamento', href: '/funcionario/financeiro', icon: WalletIcon },
-  { label: 'Salão', href: '/funcionario/salao', icon: MapPinIcon },
-  { label: 'Perfil', href: '/funcionario/perfil', icon: UserIcon },
+const employeeMenu: MenuGroup[] = [
+  {
+    title: 'Meu trabalho',
+    items: [
+      { label: 'Minha Agenda', href: '/funcionario/agenda', icon: CalendarIcon },
+      { label: 'Agendamentos', href: '/funcionario/agendamentos', icon: ListIcon },
+      { label: 'Meu Faturamento', href: '/funcionario/financeiro', icon: WalletIcon },
+      { label: 'Perfil', href: '/funcionario/perfil', icon: UserIcon },
+    ],
+  },
 ];
 
-const clientMenu = [
-  { label: 'Meus Agendamentos', href: '/meus-agendamentos', icon: CalendarIcon },
-  { label: 'Agendar', href: '/agendar', icon: ScissorsIcon },
-  { label: 'Meu Perfil', href: '/meu-perfil', icon: UserIcon },
+const clientMenu: MenuGroup[] = [
+  {
+    title: 'Minha conta',
+    items: [
+      { label: 'Meus Agendamentos', href: '/meus-agendamentos', icon: CalendarIcon },
+      { label: 'Agendar', href: '/agendar', icon: ScissorsIcon },
+      { label: 'Meu Perfil', href: '/meu-perfil', icon: UserIcon },
+    ],
+  },
 ];
 
 const variantLabels: Record<SidebarProps['variant'], string> = {
@@ -49,10 +80,17 @@ const variantLabels: Record<SidebarProps['variant'], string> = {
 
 export function Sidebar({ variant, onNavigate }: SidebarProps) {
   const { user, logout } = useAuth();
-  const menu = variant === 'owner' ? ownerMenu : variant === 'client' ? clientMenu : employeeMenu;
+  const groups: MenuGroup[] =
+    variant === 'owner' ? ownerMenu : variant === 'client' ? clientMenu : employeeMenu;
+
   const displayName =
     user && 'name' in user ? user.name : user && 'fullName' in user ? user.fullName : 'Usuário';
   const initial = displayName.charAt(0).toUpperCase();
+
+  // Foto do profissional. Sem foto, cai na inicial — o mesmo lugar em que a
+  // foto aparece no agendamento público.
+  const photoUrl =
+    user && 'photoUrl' in user && typeof user.photoUrl === 'string' ? user.photoUrl : null;
 
   return (
     <div className="flex flex-col h-full bg-brand-white">
@@ -75,9 +113,17 @@ export function Sidebar({ variant, onNavigate }: SidebarProps) {
       {/* User */}
       <div className="px-5 py-5 border-b border-brand-gray flex-shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 bg-brand-black text-brand-white flex items-center justify-center flex-shrink-0 font-display font-bold text-body">
-            {initial}
-          </div>
+          {photoUrl ? (
+            <img
+              src={photoUrl}
+              alt=""
+              className="w-10 h-10 object-cover flex-shrink-0 border border-brand-gray"
+            />
+          ) : (
+            <div className="w-10 h-10 bg-brand-black text-brand-white flex items-center justify-center flex-shrink-0 font-display font-bold text-body">
+              {initial}
+            </div>
+          )}
           <div className="min-w-0">
             <p className="font-display font-medium text-body-sm truncate">{displayName}</p>
             <p className="text-caption text-brand-grayMid">{variantLabels[variant]}</p>
@@ -87,23 +133,32 @@ export function Sidebar({ variant, onNavigate }: SidebarProps) {
 
       {/* Navigation */}
       <nav className="flex-1 px-3 py-4 overflow-y-auto" aria-label="Menu principal">
-        {menu.map((item) => (
-          <NavLink
-            key={item.href}
-            to={item.href}
-            onClick={onNavigate}
-            className={({ isActive }) => `
-              flex items-center gap-3 px-3 py-3 font-display text-body-sm
-              border-l-2 transition-colors duration-fast mb-0.5
-              ${isActive
-                ? 'border-brand-black text-brand-black bg-brand-grayLight'
-                : 'border-transparent text-brand-grayMid hover:text-brand-black hover:border-brand-gray'
-              }
-            `}
-          >
-            <item.icon className="w-4 h-4 flex-shrink-0" />
-            {item.label}
-          </NavLink>
+        {groups.map((group, gi) => (
+          <div key={group.title} className={gi > 0 ? 'mt-6' : ''}>
+            {groups.length > 1 && (
+              <p className="px-3 pb-2 font-display text-caption uppercase tracking-wider text-brand-grayMid">
+                {group.title}
+              </p>
+            )}
+            {group.items.map((item) => (
+              <NavLink
+                key={item.href}
+                to={item.href}
+                onClick={onNavigate}
+                className={({ isActive }) => `
+                  flex items-center gap-3 px-3 py-3 font-display text-body-sm
+                  border-l-2 transition-colors duration-fast mb-0.5
+                  ${isActive
+                    ? 'border-brand-black text-brand-black bg-brand-grayLight'
+                    : 'border-transparent text-brand-grayMid hover:text-brand-black hover:border-brand-gray'
+                  }
+                `}
+              >
+                <item.icon className="w-4 h-4 flex-shrink-0" />
+                {item.label}
+              </NavLink>
+            ))}
+          </div>
         ))}
       </nav>
 

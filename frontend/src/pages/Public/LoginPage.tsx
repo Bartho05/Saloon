@@ -220,7 +220,7 @@ export function LoginPage() {
           </div>
         )}
         {!authLoading && (
-        <Card variant="padded">
+        <Card>
           <CardContent>
             {/* Logo */}
             <div className="text-center mb-10">

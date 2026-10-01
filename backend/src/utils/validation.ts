@@ -154,22 +154,6 @@ export const financialQuerySchema = z.object({
   reference: z.coerce.date().optional(),
 });
 
-/**
- * Campos que o FUNCIONÁRIO pode editar.
- *
- * Deliberadamente exclui businessHours, bufferMinutes, slotInterval,
- * cancellationHours, whatsappApiConfig e birthdayMessage: são parâmetros
- * que afetam a operação do salão inteiro (grade de horários, cobrança,
- * lembretes) e ficam sob o controle do proprietário.
- */
-export const employeeSalonInfoSchema = z.object({
-  name: z.string().min(2, 'Nome deve ter pelo menos 2 caracteres').max(100),
-  phone: phoneSchema.optional(),
-  email: z.string().email('Email inválido').optional().or(z.literal('')),
-  address: z.string().max(200).optional(),
-  description: z.string().max(500).optional(),
-});
-
 // UUID param schema
 export const uuidParamSchema = z.object({
   id: z.string().uuid('ID inválido'),

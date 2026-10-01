@@ -247,9 +247,31 @@ export function OwnerSchedulePage() {
                         {apt.client?.fullName || 'Cliente'}
                       </p>
                       <p className="text-body-sm text-brand-grayMid truncate">
-                        {apt.service?.name} &middot; {apt.employee?.name}
+                        {apt.service?.name}
                       </p>
                     </div>
+
+                    {/* Profissional com foto — o dono vê de cara quem atendeu */}
+                    {apt.employee && (
+                      <div className="flex items-center gap-2.5 flex-shrink-0">
+                        <span className="w-8 h-8 flex-shrink-0 bg-brand-grayLight border border-brand-gray overflow-hidden flex items-center justify-center">
+                          {apt.employee.photoUrl ? (
+                            <img
+                              src={apt.employee.photoUrl}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="font-display font-bold text-caption text-brand-grayMid">
+                              {apt.employee.name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-body-sm truncate max-w-[9rem]">
+                          {apt.employee.name}
+                        </span>
+                      </div>
+                    )}
 
                     <div className="flex items-center gap-5 flex-shrink-0">
                       <span className="font-display font-medium text-body tabular-nums">

@@ -51,6 +51,9 @@ export async function ownerLogin(req: Request, res: Response): Promise<void> {
       email: owner.email,
       phone: owner.phone,
       role: owner.role,
+      // o dono também atende: a sidebar e a tela de perfil usam a foto dele
+      photoUrl: owner.photoUrl,
+      specialties: owner.specialties,
     },
     accessToken,
     refreshToken,
@@ -85,6 +88,9 @@ export async function employeeLogin(req: Request, res: Response): Promise<void> 
       phone: employee.phone,
       role: employee.role,
       accessCode: employee.accessCode,
+      // a sidebar mostra a foto de quem está logado
+      photoUrl: employee.photoUrl,
+      specialties: employee.specialties,
     },
     accessToken,
     refreshToken,
@@ -244,7 +250,17 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   if (req.user.role === 'OWNER' || req.user.role === 'EMPLOYEE') {
     const user = await prisma.user.findUnique({
       where: { id: req.user.sub },
-      select: { id: true, name: true, phone: true, email: true, role: true, accessCode: true, isActive: true },
+      select: {
+      id: true,
+      name: true,
+      phone: true,
+      email: true,
+      role: true,
+      accessCode: true,
+      isActive: true,
+      photoUrl: true,
+      specialties: true,
+    },
     });
     if (!user) throw new AppError('Usuário não encontrado', 404, 'USER_NOT_FOUND');
     res.json({ user });

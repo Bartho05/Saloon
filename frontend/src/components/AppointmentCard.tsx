@@ -38,6 +38,11 @@ interface AppointmentCardProps {
   updating?: boolean;
   /** mostra data completa (lista) ou só o horário (agenda do dia) */
   compactTime?: boolean;
+  /**
+   * Mostra a foto de quem atende. Na agenda do profissional é redundante —
+   * é a agenda DELLE —, então fica desligado por padrão e o cliente liga.
+   */
+  showEmployee?: boolean;
 }
 
 /**
@@ -49,6 +54,7 @@ export function AppointmentCard({
   onStatusChange,
   updating,
   compactTime,
+  showEmployee = false,
 }: AppointmentCardProps) {
   const isPast = new Date(appointment.endsAt) < new Date();
   const overdue = appointment.status === 'SCHEDULED' && isPast;
@@ -98,6 +104,28 @@ export function AppointmentCard({
           </p>
         )}
       </div>
+
+      {/* Profissional — com foto, para o cliente reconhecer quem vai atender */}
+      {showEmployee && appointment.employee && (
+        <div className="flex items-center gap-2.5 flex-shrink-0">
+          <span className="w-9 h-9 flex-shrink-0 bg-brand-grayLight border border-brand-gray overflow-hidden flex items-center justify-center">
+            {appointment.employee.photoUrl ? (
+              <img
+                src={appointment.employee.photoUrl}
+                alt=""
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <span className="font-display font-bold text-caption text-brand-grayMid">
+                {appointment.employee.name.charAt(0).toUpperCase()}
+              </span>
+            )}
+          </span>
+          <span className="text-body-sm truncate max-w-[10rem]">
+            {appointment.employee.name}
+          </span>
+        </div>
+      )}
 
       {/* Valor + status + ações */}
       <div className="flex items-center gap-4 xl:gap-6 flex-shrink-0 flex-wrap">

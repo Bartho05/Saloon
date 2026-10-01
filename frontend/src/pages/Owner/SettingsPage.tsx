@@ -1,8 +1,7 @@
 import { useState, useEffect } from 'react';
-import { ownerApi, uploadApi } from '@services/api';
+import { ownerApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { PhoneInput } from '@components/PhoneInput';
-import { ImageUpload } from '@components/ImageUpload';
 
 export function OwnerSettingsPage() {
   const { showToast } = useToast();
@@ -180,29 +179,12 @@ export function OwnerSettingsPage() {
 
       {/* General */}
       {activeTab === 'general' && (
-        <div className="card p-6 md:p-8 space-y-8">
+        <div className="card p-6 md:p-8 space-y-6">
           <div>
-            <h2 className="text-body-lg font-semibold mb-5">Identidade do salão</h2>
-            <ImageUpload
-              label="Logo"
-              shape="wide"
-              value={settings?.logoUrl ?? null}
-              onUpload={async (file) => {
-                await uploadApi.salonLogo(file);
-                await loadSettings();
-                showToast({ type: 'success', title: 'Logo atualizada' });
-              }}
-              onRemove={async () => {
-                const res = await uploadApi.removeSalonLogo();
-                setSettings((prev: any) => ({ ...prev, ...res.settings }));
-                showToast({ type: 'success', title: 'Logo removida' });
-              }}
-              hint="Aparece no cabeçalho do site e nas telas de login. Proporção horizontal funciona melhor."
-            />
-          </div>
-
-          <div className="border-t border-brand-gray pt-8">
-            <h2 className="text-body-lg font-semibold mb-5">Informações</h2>
+            <h2 className="text-body-lg font-semibold mb-5">Informações do salão</h2>
+            <p className="text-caption text-brand-grayMid -mt-3 mb-5">
+              Estes mesmos dados aparecem na página inicial e no rodapé do site.
+            </p>
           </div>
           <div className="space-y-4">
             <div>

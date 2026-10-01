@@ -3,12 +3,14 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Container, Button } from '@components/ui';
 import { MenuIcon, CloseIcon } from '@components/icons';
 
+// Só aponta para seções que existem. "Unidades" e "Avaliações" saíram da
+// landing (o salão é único e as avaliações eram fictícias) — deixar os links
+// levava a uma âncora inexistente e a página não rolava.
 const ANCHORS = [
   { id: 'about', label: 'Sobre' },
   { id: 'services', label: 'Serviços' },
   { id: 'gallery', label: 'Galeria' },
-  { id: 'locations', label: 'Unidades' },
-  { id: 'reviews', label: 'Avaliações' },
+  { id: 'localizacao', label: 'Onde estamos' },
 ];
 
 /**

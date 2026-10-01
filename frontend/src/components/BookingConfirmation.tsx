@@ -34,7 +34,7 @@ export function BookingConfirmation({
       <h2 className="text-display-md mb-2">Revise e confirme</h2>
       <p className="text-body-lg text-brand-grayMid mb-8">Confira os detalhes antes de finalizar</p>
 
-      <Card variant="padded">
+      <Card>
         <CardContent>
           <dl className="space-y-0">
             <Row label="Serviço" value={service.name} />
@@ -94,7 +94,7 @@ export function BookingConfirmation({
         </CardContent>
       </Card>
 
-      <Card variant="padded" className="border-brand-gray bg-brand-grayLight">
+      <Card className="border-brand-gray bg-brand-grayLight">
         <CardContent>
           <p className="font-display font-medium text-body-sm mb-1">Política de cancelamento</p>
           <p className="text-body-sm text-brand-grayMid">

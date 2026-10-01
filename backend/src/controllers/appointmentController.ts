@@ -39,7 +39,8 @@ export async function getAllAppointments(req: AuthRequest, res: Response): Promi
       include: {
         client: { select: { id: true, fullName: true, phone: true } },
         service: { select: { id: true, name: true, durationMinutes: true, price: true } },
-        employee: { select: { id: true, name: true } },
+        // foto do profissional, para o card da agenda mostrar com quem é
+        employee: { select: { id: true, name: true, photoUrl: true } },
       },
     }),
     prisma.appointment.count({ where }),
@@ -79,7 +80,7 @@ export async function getTodayAppointments(req: AuthRequest, res: Response): Pro
     include: {
       client: { select: { id: true, fullName: true, phone: true } },
       service: { select: { id: true, name: true, durationMinutes: true, price: true } },
-      employee: { select: { id: true, name: true } },
+      employee: { select: { id: true, name: true, photoUrl: true } },
     },
   });
 
@@ -118,6 +119,8 @@ export async function getEmployeeAppointments(req: AuthRequest, res: Response): 
       include: {
         client: { select: { id: true, fullName: true, phone: true, birthDate: true } },
         service: { select: { id: true, name: true, durationMinutes: true, price: true } },
+        // foto do profissional: o card mostra com quem o cliente marcou
+        employee: { select: { id: true, name: true, photoUrl: true } },
       },
     }),
     prisma.appointment.count({ where }),

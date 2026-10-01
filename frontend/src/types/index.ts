@@ -49,7 +49,14 @@ export interface User {
   role: 'OWNER' | 'EMPLOYEE';
   accessCode?: string;
   isActive: boolean;
+  /** Foto do rosto — o dono também é profissional e pode enviar a dele. */
+  photoUrl?: string | null;
+  specialties?: string[];
+  createdAt?: string;
 }
+
+/** Usuário no contexto de autenticação (dono ou funcionário). */
+export type AuthUser = User & Partial<Pick<Employee, 'specialties' | 'photoUrl'>>;
 
 export interface AuthState {
   user: User | Client | null;
@@ -82,7 +89,6 @@ export interface SalonSettings {
   phone?: string;
   email?: string;
   address?: string;
-  logoUrl?: string | null;
   description?: string | null;
   businessHours: Record<string, { open: string; close: string } | null>;
   timezone: string;

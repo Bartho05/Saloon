@@ -4,7 +4,7 @@ import type { OwnerFinancialOverview } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatCurrency } from '@utils/date';
 import { Card, CardContent, Container, BarChart, ProgressBar } from '@components/ui';
-import { PageHeader, StatCard, PageSpinner, EmptyState } from '@components/Dashboard';
+import { PageHeader, StatCard, PageSpinner, EmptyState, StatusBadge } from '@components/Dashboard';
 import { PeriodSelector, type Period } from '@components/PeriodSelector';
 
 export function OwnerFinancialPage() {
@@ -66,7 +66,7 @@ export function OwnerFinancialPage() {
         <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
           <h2 className="font-display font-semibold text-body">Faturamento por dia</h2>
         </div>
-        <CardContent className="p-5 md:p-6">
+        <CardContent>
           <BarChart
             data={chartData}
             height={200}
@@ -99,9 +99,17 @@ export function OwnerFinancialPage() {
                     <span className="font-display font-bold text-body-lg text-brand-grayMid w-6 flex-shrink-0">
                       {String(index + 1).padStart(2, '0')}
                     </span>
-                    <div className="w-9 h-9 bg-brand-black text-brand-white flex items-center justify-center font-display font-bold flex-shrink-0">
-                      {emp.name.charAt(0).toUpperCase()}
-                    </div>
+                    {emp.photoUrl ? (
+                      <img
+                        src={emp.photoUrl}
+                        alt=""
+                        className="w-9 h-9 object-cover flex-shrink-0 border border-brand-gray"
+                      />
+                    ) : (
+                      <div className="w-9 h-9 bg-brand-black text-brand-white flex items-center justify-center font-display font-bold flex-shrink-0">
+                        {emp.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <p className="font-display font-medium text-body">{emp.name}</p>
                       <div className="mt-2">
@@ -154,8 +162,85 @@ export function OwnerFinancialPage() {
           )}
         </Card>
       </div>
+
+      {/* Agendamentos do período, um a um.
+          Era o buraco da visão "dia": o gráfico de barras com um único dia
+          ficava quase vazio e o dono concluía que não tinha havido
+          atendimento. A lista responde a pergunta diretamente. */}
+      <Card className="mt-6">
+        <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
+          <h2 className="font-display font-semibold text-body">Agendamentos do período</h2>
+          <p className="text-caption text-brand-grayMid mt-0.5">
+            {data?.appointments.length ?? 0} registro{(data?.appointments.length ?? 0) !== 1 ? 's' : ''}
+          </p>
+        </div>
+
+        {!data?.appointments.length ? (
+          <EmptyState
+            title="Nenhum agendamento no período"
+            description="Assim que houver agendamentos, eles aparecem aqui com cliente, serviço e valor."
+          />
+        ) : (
+          <ul>
+            {data.appointments.map((apt) => {
+              const hour = new Date(apt.startsAt).toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+              const day = new Date(apt.startsAt).toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+              });
+
+              return (
+                <li
+                  key={apt.id}
+                  className="px-5 md:px-6 py-4 flex items-center gap-4 border-b border-brand-gray last:border-b-0 hover:bg-brand-grayLight transition-colors duration-fast"
+                >
+                  <div className="flex-shrink-0 w-14">
+                    <p className="font-display font-bold text-body tabular-nums leading-none">
+                      {hour}
+                    </p>
+                    <p className="text-caption text-brand-grayMid mt-1 tabular-nums">{day}</p>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display font-medium text-body-sm truncate">
+                      {apt.clientName}
+                    </p>
+                    <p className="text-caption text-brand-grayMid truncate mt-0.5">
+                      {apt.serviceName} &middot; {apt.employeeName}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <span className="font-display font-medium text-body-sm tabular-nums">
+                      {formatCurrency(apt.price)}
+                    </span>
+                    <StatusBadge tone={APPT_TONE[apt.status]}>{APPT_LABEL[apt.status]}</StatusBadge>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
     </Container>
   );
 }
+
+const APPT_LABEL: Record<string, string> = {
+  SCHEDULED: 'Agendado',
+  COMPLETED: 'Concluído',
+  CANCELLED: 'Cancelado',
+  NO_SHOW: 'Não compareceu',
+};
+
+const APPT_TONE: Record<string, 'info' | 'success' | 'danger' | 'warning'> = {
+  SCHEDULED: 'info',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+  NO_SHOW: 'warning',
+};
 
 export default OwnerFinancialPage;

@@ -215,7 +215,13 @@ export async function getPublicServices(req: AuthRequest, res: Response): Promis
 export async function getPublicEmployees(req: AuthRequest, res: Response): Promise<void> {
   const { serviceId } = req.query;
 
-  const where: any = { role: 'EMPLOYEE', isActive: true };
+  const where: any = {
+    // O DONO também atende. O dono tem papel de OWNER no banco, mas se
+    // cadastrou para fazer corte como qualquer profissional — o cliente
+    // precisa poder escolher ele.
+    role: { in: ['EMPLOYEE', 'OWNER'] },
+    isActive: true,
+  };
 
   // Se serviceId fornecido, filtra funcionários que fazem esse serviço
   // Como não temos tabela many-to-many, filtra por specialties

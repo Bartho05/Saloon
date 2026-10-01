@@ -1,20 +1,8 @@
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Section, Container, Card, CardContent, Badge, Button, Separator } from '@components/ui';
-
-const stats = [
-  { value: '10+', label: 'Barbearias na rede' },
-  { value: '80K+', label: 'Clientes satisfeitos' },
-  { value: '78K+', label: 'Cortes realizados' },
-];
-
-const services = [
-  { name: "Corte Masculino", description: "Corte clássico ou moderno com tesoura e máquina", duration: "30 min", price: 45 },
-  { name: "Barba Completa", description: "Aparar, modelar e hidratar com toalha quente", duration: "25 min", price: 35 },
-  { name: "Combo Corte + Barba", description: "Serviço completo com desconto especial", duration: "50 min", price: 70 },
-  { name: "Corte Longo (Tesoura)", description: "Corte preciso apenas com tesoura para cabelo longo", duration: "40 min", price: 55 },
-  { name: "Cabelo + Barba", description: "Corte de cabelo completo com barba aparada", duration: "55 min", price: 80 },
-  { name: "Corte Infantil", description: "Até 12 anos, com paciência e diversão", duration: "25 min", price: 30 },
-];
+import { publicApi, servicesApi } from '@services/api';
+import { formatPhone } from '@utils/validation';
 
 /**
  * Galeria em collage editorial: uma célula grande à esquerda (2 linhas) e
@@ -22,25 +10,59 @@ const services = [
  * `aspect-*` dinâmico por índice deixa buracos no grid.
  */
 const galleryImages = [
-  { src: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=900&q=80', alt: 'Interior da barbearia' },
-  { src: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=700&q=80', alt: 'Barbeiro trabalhando' },
+  { src: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=900&q=80', alt: 'Interior do salão' },
+  { src: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=700&q=80', alt: 'Profissional trabalhando' },
   { src: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?w=700&q=80', alt: 'Corte em andamento' },
   { src: 'https://images.unsplash.com/photo-1567894340315-735d7c361db0?w=700&q=80', alt: 'Detalhe do acabamento' },
 ];
 
-const reviews = [
-  { name: 'Rafael S.', role: 'Cliente frequente', text: 'Melhor corte que já tive em anos. Precisão cirúrgica no fade. Volto todo mês.', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&q=80' },
-  { name: 'Marcos L.', role: 'Novo cliente', text: 'Agendamento online funcionou perfeição. Cheguei, sentei, cortei. Sem espera.', avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?w=100&q=80' },
-  { name: 'Pedro H.', role: 'Cliente VIP', text: 'A barba com toalha quente é um ritual. Atendimento de primeira, ambiente top.', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&q=80' },
-];
+const WEEKDAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
-const locations = [
-  { name: 'MR. CUT - Centro', address: 'Rua XV de Novembro, 1200', city: 'São Paulo - SP', hours: 'Seg-Sex 9h-20h • Sáb 9h-18h' },
-  { name: 'MR. CUT - Jardins', address: 'Av. Paulista, 2000', city: 'São Paulo - SP', hours: 'Seg-Sex 10h-21h • Sáb 10h-19h' },
-  { name: 'MR. CUT - Vila Madalena', address: 'Rua Harmonia, 350', city: 'São Paulo - SP', hours: 'Seg-Sex 9h-20h • Sáb 9h-18h' },
-];
+/** "09:00 — 19:00" */
+const hora = (v: string) => v.replace(':', 'h');
 
 export function LandingPage() {
+  /**
+   * Nome, endereço, telefone e horário vêm do MESMO registro que o dono
+   * edita em Configurações. Estavam fixos no arquivo ("MR. CUT", três
+   * unidades em São Paulo) e divergiam do banco — o cliente via um
+   * endereço na landing e outro no agendamento.
+   */
+  const [salon, setSalon] = useState<{
+    name: string;
+    phone?: string | null;
+    email?: string | null;
+    address?: string | null;
+    description?: string | null;
+    businessHours: Record<string, { open: string; close: string } | null>;
+  } | null>(null);
+
+  const [servicos, setServicos] = useState<
+    Array<{ id: string; name: string; description?: string | null; durationMinutes: number; price: number }>
+  >([]);
+
+  useEffect(() => {
+    publicApi.getSalon().then((r) => setSalon(r.salon)).catch(() => setSalon(null));
+    servicesApi
+      .getPublic()
+      .then((r) => setServicos(r.services))
+      .catch(() => setServicos([]));
+  }, []);
+
+  // Enquanto carrega, usa o nome salvo para o cabeçalho não piscar vazio.
+  const nome = salon?.name || 'Meu Salão';
+
+  const horariosAbertos = Object.entries(salon?.businessHours || {}).filter(
+    ([, v]) => v !== null
+  );
+  const resumoHorario =
+    horariosAbertos.length === 0
+      ? 'Consulte os horários'
+      : `${WEEKDAYS_SHORT[Number(horariosAbertos[0][0])]} a ${
+          WEEKDAYS_SHORT[Number(horariosAbertos[horariosAbertos.length - 1][0])]
+        } · ${hora(horariosAbertos[0][1]!.open)} — ${hora(horariosAbertos[0][1]!.close)}`;
+
   return (
     <div className="min-h-screen bg-brand-white text-brand-black">
       {/* Hero Section */}
@@ -48,22 +70,22 @@ export function LandingPage() {
         <Container>
           <div className="grid md:grid-cols-2 gap-12 lg:gap-20 items-center">
             <div className="max-w-xl">
-              <Badge variant="outline" className="mb-6">BARBEARIA PREMIUM • REDE EM SÃO PAULO</Badge>
+              <Badge variant="outline" className="mb-6">SALÃO</Badge>
               <h1 className="text-display-xl md:text-display-lg leading-[0.9] mb-6">
-                MR. CUT
+                {nome}
                 <br />
-                <span className="text-brand-grayMid font-normal">BARBEARIA</span>
+                <span className="text-brand-grayMid font-normal">AGENDAMENTO ONLINE</span>
               </h1>
               <p className="text-body-lg text-brand-grayMid mb-10 max-w-md">
-                Rede de barbearias modernas focada em qualidade, estilo e precisão.
-                Agendamento online, profissionais especializados e experiência única.
+                {salon?.description ||
+                  'Agende online, escolha o profissional e o horário. Escolha de serviço, profissional e horário, com confirmação na hora.'}
               </p>
               <div className="flex flex-wrap gap-4">
                 <Link to="/agendar">
                   <Button size="lg">Agendar Horário</Button>
                 </Link>
-                <Link to="#locations">
-                  <Button variant="outline" size="lg">Nossas Unidades</Button>
+                <Link to="#servicos">
+                  <Button variant="outline" size="lg">Ver Serviços</Button>
                 </Link>
               </div>
             </div>
@@ -78,20 +100,28 @@ export function LandingPage() {
                 />
                 <div className="overlay-gradient" />
               </div>
-              {/* Overlapping stat card */}
+              {/* Sobreposição com o horário real */}
               <div className="absolute -bottom-6 -left-6 md:-left-10 bg-brand-white border border-brand-gray p-6 md:p-8 shadow-elevated animate-slide-up">
-                <p className="font-display font-bold text-display-md">10+</p>
-                <p className="text-caption text-brand-grayMid">Unidades</p>
+                <p className="font-display font-bold text-display-md">{hora(horariosAbertos[0]?.[1]?.open || '09:00')}</p>
+                <p className="text-caption text-brand-grayMid">Abre às</p>
               </div>
             </div>
           </div>
         </Container>
 
-        {/* Stats Bar */}
+        {/* Serviços em destaque — mesmos dados do banco */}
         <div className="border-t border-brand-gray mt-16 md:mt-24">
           <Container>
-            <div className="grid grid-cols-3 gap-8 py-12 md:py-16">
-              {stats.map((stat) => (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 py-12 md:py-16">
+              {[
+                { value: String(servicos.length), label: 'Serviços' },
+                { value: resumoHorario.split('·')[1]?.trim() || '—', label: 'Horário' },
+                {
+                  value: salon?.phone ? hora(formatPhone(salon.phone).replace(/[^\d:]/g, (m) => (m === ':' ? ':' : ''))) : '—',
+                  label: 'Contato',
+                },
+                { value: '100%', label: 'Online' },
+              ].map((stat) => (
                 <div key={stat.label} className="text-center border-l border-brand-gray first:border-0 pl-8 first:pl-0">
                   <p className="font-display font-bold text-display-lg md:text-display-xl">{stat.value}</p>
                   <p className="text-caption text-brand-grayMid mt-1">{stat.label}</p>
@@ -107,28 +137,27 @@ export function LandingPage() {
         <Container>
           <div className="grid md:grid-cols-2 gap-12 lg:gap-20 items-center">
             <div>
-              <Badge variant="outline" className="mb-4">NOSSA MISSÃO</Badge>
+              <Badge variant="outline" className="mb-4">SOBRE</Badge>
               <h2 className="text-display-md md:text-display-lg mb-6">
-                Qualidade, estilo e precisão em cada corte
+                Agendar leva menos de dois minutos
               </h2>
               <p className="text-body-lg text-brand-grayMid mb-6">
-                A MR. CUT nasceu da ideia de que o corte de cabelo masculino não precisa ser complicado.
-                Unimos a tradição da barbearia clássica — toalha quente, navalha, precisão — com a conveniência
-                do mundo digital: agendamento 24/7, escolha de profissional, lembretes automáticos.
+                Escolha o serviço, o profissional e o horário. A confirmação chega na hora
+                e você acompanha tudo pela sua conta, sem precisar ligar.
               </p>
               <p className="text-body text-brand-grayMid mb-8">
-                Cada unidade segue o mesmo padrão de excelência. Do Centro à Vila Madalena,
-                você sabe exatamente o que vai encontrar: profissionais treinados, equipamentos de ponta
-                e um ambiente pensado para o homem moderno.
+                Todo atendimento começa com o profissional que você escolher, e você vê a
+                foto dele antes de confirmar. Os horários respeitam a agenda de cada um
+                e o intervalo entre um atendimento e outro.
               </p>
-              <Link to="#locations">
-                <Button variant="outline" size="lg">Conheça nossas unidades</Button>
+              <Link to="#servicos">
+                <Button variant="outline" size="lg">Ver os serviços</Button>
               </Link>
             </div>
             <div className="relative aspect-landscape">
               <img
                 src="https://images.unsplash.com/photo-1621605815971-fbc98d665033?w=1000&q=80"
-                alt="Barbeiro trabalhando em corte preciso"
+                alt="Profissional trabalhando em corte preciso"
                 className="w-full h-full object-cover"
               />
             </div>
@@ -150,18 +179,20 @@ export function LandingPage() {
           {/* Card inteiro clicável — em um site de agendamento o alvo de toque
               precisa ser o card, não só o texto do link. */}
           <div className="grid-editorial-3">
-            {services.map((service) => (
+            {servicos.map((service) => (
               <Link
-                key={service.name}
+                key={service.id}
                 to="/agendar"
                 className="card-hover flex flex-col p-6 md:p-8 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-black"
               >
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <h3 className="font-display font-semibold text-body-lg">{service.name}</h3>
-                  <span className="badge badge-muted flex-shrink-0">{service.duration}</span>
+                  <span className="badge badge-muted flex-shrink-0">{service.durationMinutes} min</span>
                 </div>
 
-                <p className="text-body-sm text-brand-grayMid mb-8 flex-1">{service.description}</p>
+                <p className="text-body-sm text-brand-grayMid mb-8 flex-1">
+                  {service.description || 'Serviço realizado pelo profissional.'}
+                </p>
 
                 <div className="flex items-end justify-between gap-4 pt-5 border-t border-brand-gray">
                   <span className="font-display font-bold text-display-sm leading-none">
@@ -234,94 +265,99 @@ export function LandingPage() {
         </Container>
       </Section>
 
-      {/* Reviews */}
-      <Section id="reviews" size="lg">
+      {/* Onde estamos — endereço do banco, não unidades fictícias */}
+      <Section id="localizacao" size="lg" background="gray">
         <Container>
           <div className="max-w-2xl mx-auto text-center mb-16">
-            <Badge variant="outline" className="mb-4">AVALIAÇÕES</Badge>
-            <h2 className="text-display-md md:text-display-lg mb-4">O que dizem nossos clientes</h2>
-            <p className="text-body-lg text-brand-grayMid">Mais de 80.000 clientes satisfeitos</p>
-          </div>
-
-          <div className="grid-editorial-3">
-            {reviews.map((review) => (
-              <Card key={review.name} variant="padded">
-                <CardContent>
-                  <div className="flex items-center gap-3 mb-4">
-                    <img src={review.avatar} alt={review.name} className="w-12 h-12 rounded-full object-cover border border-brand-gray" />
-                    <div>
-                      <p className="font-display font-medium text-body">{review.name}</p>
-                      <p className="text-caption text-brand-grayMid">{review.role}</p>
-                    </div>
-                  </div>
-                  <p className="text-body text-brand-grayMid mb-4">"{review.text}"</p>
-                  <div className="flex items-center gap-1 text-amber-500">
-                    {[1,2,3,4,5].map(() => <svg key={Math.random()} className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/></svg>)}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </Container>
-      </Section>
-
-      {/* Locations */}
-      <Section id="locations" size="lg" background="gray">
-        <Container>
-          <div className="max-w-2xl mx-auto text-center mb-16">
-            <Badge variant="outline" className="mb-4">UNIDADES</Badge>
+            <Badge variant="outline" className="mb-4">LOCALIZAÇÃO</Badge>
             <h2 className="text-display-md md:text-display-lg mb-4">Onde nos encontrar</h2>
-            <p className="text-body-lg text-brand-grayMid">Três unidades em São Paulo, mesma excelência</p>
+            <p className="text-body-lg text-brand-grayMid">{nome}</p>
           </div>
 
-          <div className="grid-editorial-3">
-            {locations.map((loc) => (
-              <Card key={loc.name} variant="hover">
-                <CardContent>
-                  <h3 className="font-display font-semibold text-body-lg mb-2">{loc.name}</h3>
-                  <p className="text-body-sm text-brand-grayMid mb-1">{loc.address}</p>
-                  <p className="text-body-sm text-brand-grayMid mb-4">{loc.city}</p>
-                  <div className="divider" />
-                  <p className="text-caption text-brand-grayMid">{loc.hours}</p>
-                  <Link to="/agendar" className="mt-6 block">
-                    <Button variant="minimal" className="w-full justify-center">Agendar nesta unidade</Button>
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+          <div className="grid lg:grid-cols-2 gap-6 items-start">
+            <Card>
+              <CardContent>
+                <h3 className="font-display font-semibold text-body-lg mb-4">{nome}</h3>
 
-          {/* Mapa — iframe do Google não renderiza em screenshots, bloqueadores
-              ou sem consentimento de cookies. O frame com cabeçalho garante
-              que mesmo vazio o bloco pareça intencional, e o link externo
-              sempre dá saída. */}
-          <figure className="mt-14 border border-brand-gray bg-brand-white">
-            <figcaption className="flex items-center justify-between gap-4 px-5 py-3 border-b border-brand-gray">
-              <span className="font-display text-caption">ONDE NOS ENCONTRAR</span>
-              <a
-                href="https://www.google.com/maps/search/?api=1&query=Avenida+Paulista,+S%C3%A3o+Paulo+-+SP"
-                target="_blank"
-                rel="noreferrer"
-                className="btn-minimal"
-              >
-                Abrir no Google Maps
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 17 17 7M9 7h8v8" />
-                </svg>
-              </a>
-            </figcaption>
-            <div className="relative aspect-[21/9] bg-brand-grayLight">
-              <iframe
-                src="https://www.google.com/maps?q=Avenida+Paulista,+S%C3%A3o+Paulo+-+SP&output=embed"
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                // Escala de cinza mantém o mapa dentro da paleta monocromática;
-                // no hover volta ao normal para a pessoa navegar com cores.
-                className="absolute inset-0 w-full h-full grayscale contrast-[1.05] transition-[filter] duration-normal hover:grayscale-0"
-                title="Mapa das unidades MR. CUT"
-              />
-            </div>
-          </figure>
+                {salon?.address ? (
+                  <p className="text-body text-brand-grayMid mb-1">{salon.address}</p>
+                ) : (
+                  <p className="text-body text-brand-grayMid mb-1 italic">
+                    Endereço não cadastrado. O proprietário pode informá-lo em Configurações.
+                  </p>
+                )}
+
+                {salon?.phone && <p className="text-body text-brand-grayMid mt-4">{formatPhone(salon.phone)}</p>}
+                {salon?.email && (
+                  <p className="text-body-sm text-brand-grayMid mt-1 break-all">{salon.email}</p>
+                )}
+
+                <div className="divider my-6" />
+
+                <h4 className="font-display text-caption uppercase tracking-wider text-brand-grayMid mb-3">
+                  Horário de funcionamento
+                </h4>
+                <ul className="space-y-2">
+                  {WEEKDAYS.map((dia, i) => {
+                    const h = salon?.businessHours?.[String(i)];
+                    return (
+                      <li
+                        key={dia}
+                        className="flex items-center justify-between text-body-sm border-b border-brand-gray pb-2 last:border-0"
+                      >
+                        <span>{dia}</span>
+                        <span className={h ? 'font-display' : 'text-brand-grayMid'}>
+                          {h ? `${hora(h.open)} — ${hora(h.close)}` : 'Fechado'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+
+                <Link to="/agendar" className="mt-8 block">
+                  <Button className="w-full justify-center">Agendar neste salão</Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Mapa — iframe do Google não renderiza em screenshots, bloqueadores
+                ou sem consentimento de cookies. O frame com cabeçalho garante
+                que mesmo vazio o bloco pareça intencional, e o link externo
+                sempre dá saída. */}
+            <figure className="border border-brand-gray bg-brand-white">
+              <figcaption className="flex items-center justify-between gap-4 px-5 py-3 border-b border-brand-gray">
+                <span className="font-display text-caption">ONDE NOS ENCONTRAR</span>
+                {salon?.address && (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(salon.address)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-minimal"
+                  >
+                    Abrir no Google Maps
+                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M9 7h8v8" /></svg>
+                  </a>
+                )}
+              </figcaption>
+              <div className="relative aspect-[4/3] bg-brand-grayLight">
+                {salon?.address ? (
+                  <iframe
+                    src={`https://www.google.com/maps?q=${encodeURIComponent(salon.address)}&output=embed`}
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    // Escala de cinza mantém o mapa dentro da paleta monocromática;
+                    // no hover volta ao normal para a pessoa navegar com cores.
+                    className="absolute inset-0 w-full h-full grayscale contrast-[1.05] transition-[filter] duration-normal hover:grayscale-0"
+                    title={`Mapa de ${nome}`}
+                  />
+                ) : (
+                  <p className="absolute inset-0 flex items-center justify-center text-body-sm text-brand-grayMid text-center px-6">
+                    Sem endereço cadastrado para exibir no mapa.
+                  </p>
+                )}
+              </div>
+            </figure>
+          </div>
         </Container>
       </Section>
 
@@ -344,32 +380,40 @@ export function LandingPage() {
         </Container>
       </Section>
 
-      {/* Footer */}
+      {/* Footer — mesma fonte de dados do resto da página */}
       <footer className="border-t border-brand-gray py-12">
         <Container>
           <div className="grid md:grid-cols-4 gap-8">
             <div className="md:col-span-2">
-              <Link to="/" className="font-display font-bold text-display-sm tracking-tight block mb-4">MR. CUT</Link>
+              <Link
+                to="/"
+                className="font-display font-bold text-display-sm tracking-tight block mb-4"
+              >
+                {nome}
+              </Link>
               <p className="text-body-sm text-brand-grayMid max-w-sm">
-                Rede de barbearias premium em São Paulo. Qualidade, estilo e precisão desde 2019.
+                {salon?.description || 'Agendamento online, escolha de serviço, profissional e horário.'}
               </p>
             </div>
             <div>
-              <h4 className="font-display font-medium text-caption text-brand-grayMid mb-3">UNIDADES</h4>
+              <h4 className="font-display font-medium text-caption text-brand-grayMid mb-3">ENDEREÇO</h4>
               <ul className="space-y-2 text-body-sm text-brand-grayMid">
-                {locations.map((l) => <li key={l.name}>{l.name}</li>)}
+                <li>{salon?.address || 'Não cadastrado'}</li>
               </ul>
             </div>
             <div>
               <h4 className="font-display font-medium text-caption text-brand-grayMid mb-3">CONTATO</h4>
               <ul className="space-y-2 text-body-sm text-brand-grayMid">
-                <li>(11) 99999-9999</li>
-                <li>contato@mrcut.com.br</li>
+                {salon?.phone && <li>{formatPhone(salon.phone)}</li>}
+                {salon?.email && <li className="break-all">{salon.email}</li>}
+                {!salon?.phone && !salon?.email && <li>Não cadastrado</li>}
               </ul>
             </div>
           </div>
           <Separator className="my-8" />
-          <p className="text-caption text-brand-grayMid text-center">© 2024 MR. CUT. Todos os direitos reservados.</p>
+          <p className="text-caption text-brand-grayMid text-center">
+            © {new Date().getFullYear()} {nome}. Todos os direitos reservados.
+          </p>
         </Container>
       </footer>
     </div>

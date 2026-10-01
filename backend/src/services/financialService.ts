@@ -27,6 +27,25 @@ export interface FinancialSummary {
     revenue: number;
   }>;
   daily: Array<{ date: string; count: number; revenue: number }>;
+  /**
+   * Os agendamentos do período, um a um.
+   *
+   * Sem isto a tela só mostra agregados: no mês e no ano o gráfico de
+   * barras com muitos dias dá a impressão de que há dados, mas na visão de
+   * "dia" sobra uma barra solitária e o usuário conclui que não houve
+   * atendimento nenhum.
+   */
+  appointments: FinancialAppointment[];
+}
+
+export interface FinancialAppointment {
+  id: string;
+  startsAt: string;
+  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+  clientName: string;
+  employeeName: string;
+  serviceName: string;
+  price: number;
 }
 
 /**
@@ -79,18 +98,21 @@ export async function getFinancialSummary(
     where: {
       employeeId,
       startsAt: { gte: start, lte: end },
-      status: { not: 'CANCELLED' },
     },
     select: {
       id: true,
       startsAt: true,
       status: true,
+      client: { select: { fullName: true } },
       service: { select: { id: true, name: true, price: true } },
     },
     orderBy: { startsAt: 'asc' },
   });
 
-  const completed = appointments.filter((a) => a.status === 'COMPLETED');
+  // Cancelado não é agendamento: some do total e das listas, mas continua
+  // no relatório de appointments para dar para auditar.
+  const ativos = appointments.filter((a) => a.status !== 'CANCELLED');
+  const completed = ativos.filter((a) => a.status === 'COMPLETED');
   const revenue = completed.reduce((sum, a) => sum + (a.service.price ?? 0), 0);
 
   // Agregação por serviço
@@ -120,10 +142,10 @@ export async function getFinancialSummary(
     period,
     range: { start: start.toISOString(), end: end.toISOString() },
     totals: {
-      appointments: appointments.length,
+      appointments: ativos.length,
       completed: completed.length,
       cancelled: appointments.filter((a) => a.status === 'CANCELLED').length,
-      noShow: appointments.filter((a) => a.status === 'NO_SHOW').length,
+      noShow: ativos.filter((a) => a.status === 'NO_SHOW').length,
       revenue,
       averageTicket: completed.length > 0 ? revenue / completed.length : 0,
     },
@@ -133,6 +155,15 @@ export async function getFinancialSummary(
     daily: [...dailyMap.entries()]
       .map(([date, v]) => ({ date, ...v }))
       .sort((a, b) => a.date.localeCompare(b.date)),
+    appointments: ativos.map((a) => ({
+      id: a.id,
+      startsAt: a.startsAt.toISOString(),
+      status: a.status,
+      clientName: a.client.fullName,
+      employeeName: '',
+      serviceName: a.service.name,
+      price: a.service.price ?? 0,
+    })),
   };
 }
 
@@ -143,6 +174,7 @@ export async function getOwnerFinancialOverview(
 ): Promise<{
   period: Period;
   label: string;
+  range: { start: string; end: string };
   totals: { revenue: number; appointments: number; averageTicket: number };
   employees: Array<{
     id: string;
@@ -154,27 +186,42 @@ export async function getOwnerFinancialOverview(
   }>;
   byService: Array<{ name: string; count: number; revenue: number }>;
   daily: Array<{ date: string; count: number; revenue: number }>;
+  /** Agendamentos um a um — sem isto a visão "dia" fica sem conteúdo. */
+  appointments: FinancialAppointment[];
 }> {
   const { start, end, label } = resolvePeriod(period, reference);
 
-  const appointments = await prisma.appointment.findMany({
-    where: { startsAt: { gte: start, lte: end }, status: 'COMPLETED' },
+  const all = await prisma.appointment.findMany({
+    where: { startsAt: { gte: start, lte: end } },
     select: {
+      id: true,
       startsAt: true,
-      employee: { select: { id: true, name: true } },
+      status: true,
+      employee: { select: { id: true, name: true, photoUrl: true } },
       service: { select: { name: true, price: true } },
+      client: { select: { fullName: true } },
     },
+    orderBy: { startsAt: 'asc' },
   });
 
-  const employeeMap = new Map<string, { name: string; appointments: number; revenue: number }>();
+  // Faturamento é só o que foi concluído; a lista mostra tudo para dar para
+  // conferir o dia e ver o que ficou pendente.
+  const appointments = all.filter((a) => a.status !== 'CANCELLED');
+  const concluidos = appointments.filter((a) => a.status === 'COMPLETED');
+
+  const employeeMap = new Map<
+    string,
+    { name: string; photoUrl: string | null; appointments: number; revenue: number }
+  >();
   const serviceMap = new Map<string, { count: number; revenue: number }>();
   const dailyMap = new Map<string, { count: number; revenue: number }>();
 
-  for (const apt of appointments) {
+  for (const apt of concluidos) {
     const price = apt.service.price ?? 0;
 
     const emp = employeeMap.get(apt.employee.id) ?? {
       name: apt.employee.name,
+      photoUrl: apt.employee.photoUrl,
       appointments: 0,
       revenue: 0,
     };
@@ -198,6 +245,7 @@ export async function getOwnerFinancialOverview(
     .map(([id, v]) => ({
       id,
       name: v.name,
+      photoUrl: v.photoUrl,
       appointments: v.appointments,
       completed: v.appointments,
       revenue: v.revenue,
@@ -211,6 +259,7 @@ export async function getOwnerFinancialOverview(
   return {
     period,
     label,
+    range: { start: start.toISOString(), end: end.toISOString() },
     totals: {
       revenue: totalRevenue,
       appointments: totalAppointments,
@@ -223,5 +272,14 @@ export async function getOwnerFinancialOverview(
     daily: [...dailyMap.entries()]
       .map(([date, v]) => ({ date, ...v }))
       .sort((a, b) => a.date.localeCompare(b.date)),
+    appointments: appointments.map((a) => ({
+      id: a.id,
+      startsAt: a.startsAt.toISOString(),
+      status: a.status,
+      clientName: a.client.fullName,
+      employeeName: a.employee.name,
+      serviceName: a.service.name,
+      price: a.service.price ?? 0,
+    })),
   };
 }

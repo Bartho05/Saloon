@@ -17,7 +17,6 @@ import { OwnerSettingsPage } from '@pages/Owner/SettingsPage';
 import { EmployeeSchedulePage } from '@pages/Employee/SchedulePage';
 import { EmployeeAppointmentsPage } from '@pages/Employee/AppointmentsPage';
 import { EmployeeFinancialPage } from '@pages/Employee/FinancialPage';
-import { EmployeeSalonPage } from '@pages/Employee/SalonPage';
 import { EmployeeProfilePage } from '@pages/Employee/ProfilePage';
 
 function BookingConfirmedPage() {
@@ -72,7 +71,7 @@ function App() {
 
       {/* Owner Routes */}
       <Route 
-        path="/owner/*" 
+        path="/owner/*"
         element={
           <ProtectedRoute allowedRoles={['OWNER']}>
             <DashboardLayout variant="owner" />
@@ -85,12 +84,21 @@ function App() {
         <Route path="agenda" element={<OwnerSchedulePage />} />
         <Route path="financeiro" element={<OwnerFinancialPage />} />
         <Route path="configuracoes" element={<OwnerSettingsPage />} />
+
+        {/* O dono também atende: as mesmas telas de funcionário, com a
+            agenda e o faturamento DELE (o employeeId vem do token, então
+            não há como ver o faturamento de outro). */}
+        <Route path="minha-agenda" element={<EmployeeSchedulePage />} />
+        <Route path="meus-agendamentos" element={<EmployeeAppointmentsPage />} />
+        <Route path="meu-faturamento" element={<EmployeeFinancialPage />} />
+        <Route path="meu-perfil" element={<EmployeeProfilePage />} />
+
         <Route index element={<Navigate to="dashboard" replace />} />
       </Route>
 
       {/* Employee Routes */}
-      <Route 
-        path="/funcionario/*" 
+      <Route
+        path="/funcionario/*"
         element={
           <ProtectedRoute allowedRoles={['EMPLOYEE']}>
             <DashboardLayout variant="employee" />
@@ -100,7 +108,6 @@ function App() {
         <Route path="agenda" element={<EmployeeSchedulePage />} />
         <Route path="agendamentos" element={<EmployeeAppointmentsPage />} />
         <Route path="financeiro" element={<EmployeeFinancialPage />} />
-        <Route path="salao" element={<EmployeeSalonPage />} />
         <Route path="perfil" element={<EmployeeProfilePage />} />
         <Route index element={<Navigate to="agenda" replace />} />
       </Route>

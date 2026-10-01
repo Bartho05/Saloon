@@ -155,6 +155,12 @@ export const authApi = {
 export const servicesApi = {
   getAll: () => request<{ services: Service[] }>('/services'),
   getById: (id: string) => request<{ service: Service }>(`/services/${id}`),
+  /**
+   * Serviços ativos, sem autenticação — é o que a landing page mostra.
+   * Aponta para o mesmo endpoint público do agendamento, então a lista do
+   * site e a do fluxo de reserva nunca divergem.
+   */
+  getPublic: () => request<{ services: Service[] }>('/booking/public-services'),
 };
 
 // Employees
@@ -282,11 +288,12 @@ export const ownerApi = {
 // Employee
 export const employeeApi = {
   getProfile: () => request<{ employee: Employee }>('/employee/profile'),
-  getAppointments: (params?: { status?: string; startDate?: string; endDate?: string }) => {
+  getAppointments: (params?: { status?: string; startDate?: string; endDate?: string; limit?: number }) => {
     const query = new URLSearchParams();
     if (params?.status) query.set('status', params.status);
     if (params?.startDate) query.set('startDate', params.startDate);
     if (params?.endDate) query.set('endDate', params.endDate);
+    if (params?.limit) query.set('limit', String(params.limit));
     return request<{ appointments: Appointment[]; pagination: any }>(`/employee/appointments?${query}`);
   },
   getTodayAppointments: () => request<{ appointments: Appointment[] }>('/employee/appointments/today'),
@@ -312,6 +319,18 @@ export interface FinancialSummary {
   };
   byService: Array<{ serviceId: string; name: string; count: number; revenue: number }>;
   daily: Array<{ date: string; count: number; revenue: number }>;
+  /** Agendamentos um a um — é o que a visão "dia" lista. */
+  appointments: FinancialAppointment[];
+}
+
+export interface FinancialAppointment {
+  id: string;
+  startsAt: string;
+  status: 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | 'NO_SHOW';
+  clientName: string;
+  employeeName: string;
+  serviceName: string;
+  price: number;
 }
 
 export interface OwnerFinancialOverview {
@@ -321,6 +340,7 @@ export interface OwnerFinancialOverview {
   employees: Array<{
     id: string;
     name: string;
+    photoUrl?: string | null;
     appointments: number;
     completed: number;
     revenue: number;
@@ -328,6 +348,7 @@ export interface OwnerFinancialOverview {
   }>;
   byService: Array<{ name: string; count: number; revenue: number }>;
   daily: Array<{ date: string; count: number; revenue: number }>;
+  appointments: FinancialAppointment[];
 }
 
 export const financialApi = {
@@ -371,10 +392,6 @@ async function uploadImage(endpoint: string, file: File, method = 'POST'): Promi
 }
 
 export const uploadApi = {
-  salonLogo: (file: File) => uploadImage('/owner/settings/logo', file),
-  removeSalonLogo: () =>
-    request<{ settings: SalonSettings }>('/owner/settings/logo', { method: 'DELETE' }),
-  employeeSalonLogo: (file: File) => uploadImage('/employee/salon/logo', file),
   myPhoto: (file: File) => uploadImage('/employee/photo', file, 'PATCH'),
   removeMyPhoto: () =>
     request<{ employee: Employee }>('/employee/photo', { method: 'DELETE' }),
@@ -383,13 +400,27 @@ export const uploadApi = {
     request<{ employee: Employee }>(`/owner/employees/${id}/photo`, { method: 'DELETE' }),
 };
 
-export const salonApi = {
-  get: () => request<{ settings: SalonSettings }>('/employee/salon'),
-  update: (data: Partial<SalonSettings>) =>
-    request<{ settings: SalonSettings }>('/employee/salon', {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+export const publicApi = {
+  /**
+   * Dados do salão para a landing page.
+   *
+   * Vem do mesmo registro que o dono edita em Configurações — a página
+   * pública não guarda cópia própria, senão nome e endereço divergem.
+   *
+   * Rota `/salon` (o router público é montado na raiz da API, igual a
+   * `/services` e `/employees/active`).
+   */
+  getSalon: () =>
+    request<{
+      salon: {
+        name: string;
+        phone?: string | null;
+        email?: string | null;
+        address?: string | null;
+        description?: string | null;
+        businessHours: Record<string, { open: string; close: string } | null>;
+      };
+    }>('/salon'),
 };
 
 export { ApiError };

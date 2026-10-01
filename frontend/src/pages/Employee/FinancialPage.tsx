@@ -4,7 +4,7 @@ import type { FinancialSummary } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatCurrency } from '@utils/date';
 import { Card, CardContent, Container, BarChart, ProgressBar } from '@components/ui';
-import { PageHeader, StatCard, PageSpinner } from '@components/Dashboard';
+import { PageHeader, StatCard, PageSpinner, EmptyState, StatusBadge } from '@components/Dashboard';
 import { PeriodSelector, type Period } from '@components/PeriodSelector';
 
 export function EmployeeFinancialPage() {
@@ -78,7 +78,7 @@ export function EmployeeFinancialPage() {
               Somente atendimentos concluídos
             </p>
           </div>
-          <CardContent className="p-5 md:p-6">
+          <CardContent>
             <BarChart
               data={chartData}
               height={200}
@@ -92,7 +92,7 @@ export function EmployeeFinancialPage() {
           <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
             <h2 className="font-display font-semibold text-body">Por serviço</h2>
           </div>
-          <CardContent className="p-5 md:p-6">
+          <CardContent>
             {!data?.byService.length ? (
               <p className="text-body-sm text-brand-grayMid py-4 text-center">
                 Sem atendimentos concluídos
@@ -122,8 +122,77 @@ export function EmployeeFinancialPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Agendamentos um a um — mesma razão do dono: na visão "dia" o
+          gráfico sozinho não mostra o que aconteceu. */}
+      <Card className="mt-6">
+        <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
+          <h2 className="font-display font-semibold text-body">Agendamentos do período</h2>
+          <p className="text-caption text-brand-grayMid mt-0.5">
+            {data?.appointments.length ?? 0} registro{(data?.appointments.length ?? 0) !== 1 ? 's' : ''}
+          </p>
+        </div>
+
+        {!data?.appointments.length ? (
+          <EmptyState
+            title="Nenhum agendamento no período"
+            description="Quando você tiver atendimentos marcados, eles aparecem aqui."
+          />
+        ) : (
+          <ul>
+            {data.appointments.map((apt) => {
+              const when = new Date(apt.startsAt);
+              return (
+                <li
+                  key={apt.id}
+                  className="px-5 md:px-6 py-4 flex items-center gap-4 border-b border-brand-gray last:border-b-0 hover:bg-brand-grayLight transition-colors duration-fast"
+                >
+                  <div className="flex-shrink-0 w-14">
+                    <p className="font-display font-bold text-body tabular-nums leading-none">
+                      {when.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                    <p className="text-caption text-brand-grayMid mt-1 tabular-nums">
+                      {when.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                    </p>
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display font-medium text-body-sm truncate">
+                      {apt.clientName}
+                    </p>
+                    <p className="text-caption text-brand-grayMid truncate mt-0.5">
+                      {apt.serviceName}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-4 flex-shrink-0">
+                    <span className="font-display font-medium text-body-sm tabular-nums">
+                      {formatCurrency(apt.price)}
+                    </span>
+                    <StatusBadge tone={APPT_TONE[apt.status]}>{APPT_LABEL[apt.status]}</StatusBadge>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Card>
     </Container>
   );
 }
+
+const APPT_LABEL: Record<string, string> = {
+  SCHEDULED: 'Agendado',
+  COMPLETED: 'Concluído',
+  CANCELLED: 'Cancelado',
+  NO_SHOW: 'Não compareceu',
+};
+
+const APPT_TONE: Record<string, 'info' | 'success' | 'danger' | 'warning'> = {
+  SCHEDULED: 'info',
+  COMPLETED: 'success',
+  CANCELLED: 'danger',
+  NO_SHOW: 'warning',
+};
 
 export default EmployeeFinancialPage;

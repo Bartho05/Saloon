@@ -64,7 +64,8 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
  */
 export async function getActiveEmployees(req: AuthRequest, res: Response): Promise<void> {
   const employees = await prisma.user.findMany({
-    where: { role: 'EMPLOYEE', isActive: true },
+    // inclui o OWNER: ele também atende e precisa aparecer na lista
+    where: { role: { in: ['EMPLOYEE', 'OWNER'] }, isActive: true },
     orderBy: { name: 'asc' },
     select: {
       id: true,
@@ -269,7 +270,7 @@ export async function deleteEmployee(req: AuthRequest, res: Response): Promise<v
 export async function getEmployeeProfile(req: AuthRequest, res: Response): Promise<void> {
   const entity = req.userEntity;
 
-  if (!entity || !('role' in entity) || entity.role === 'OWNER') {
+  if (!entity || !('role' in entity)) {
     throw new AppError('Acesso restrito a funcionários', 403, 'FORBIDDEN');
   }
 

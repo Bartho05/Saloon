@@ -52,9 +52,8 @@ router.post('/settings/run-reminder-job', asyncHandler(settingsController.runRem
 // Financeiro
 router.get('/financial', validateQuery(financialQuerySchema), asyncHandler(settingsController.getFinancialOverview));
 
-// Logo do salão
-router.post('/settings/logo', uploadImage.single('photo'), asyncHandler(settingsController.uploadSalonLogo));
-router.delete('/settings/logo', asyncHandler(settingsController.removeSalonLogo));
+// Sem logo do salão: o usuário pediu para remover. O campo saiu do schema
+// numa migration e a página de Configurações não tem mais o upload.
 
 // Foto dos funcionários
 router.patch(

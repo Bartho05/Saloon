@@ -1,10 +1,16 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { authApi } from '@services/api';
+import { authApi, isAuthFailure } from '@services/api';
 import type { AuthState } from '@types';
 
 interface AuthContextType extends AuthState {
   /** true enquanto os tokens do localStorage estão sendo validados */
   loading: boolean;
+  /**
+   * Mensagem de falha passageira ao reidratar ("Você fez muitas requisições…").
+   * Preenchida quando os tokens existem mas a consulta falhou por 429/500/rede.
+   * Nula quando não há sessão, ou quando a sessão acabou de verdade.
+   */
+  sessionError: string | null;
   loginOwner: (email: string, password: string) => Promise<void>;
   loginEmployee: (accessCode: string) => Promise<void>;
   requestClientCode: (phone: string) => Promise<string | null>;
@@ -25,6 +31,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   const [loading, setLoading] = useState(true);
+
+  /**
+   * Mensagem de falha passageira ao reidratar a sessão.
+   *
+   * Distingue "não estou logado" de "não consegui conferir se estou logado".
+   * Sem isso, um 429 jogava o dono para a tela de login mesmo com o token
+   * válido, e ele achava que a conta tinha sido desconectada.
+   */
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   // Reidrata a sessão salva no navegador.
   //
@@ -54,8 +69,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isAuthenticated: true,
           role,
         });
-      } catch {
-        clearAuth();
+      } catch (err) {
+        /**
+         * Só descarta a sessão quando a falha é de AUTENTICAÇÃO.
+         *
+         * Antes qualquer erro derrubava o login — inclusive 429 do rate
+         * limiter, 500 e queda de rede. Perder a sessão por um 429 é o pior
+         * caso possível: obriga o dono a digitar e-mail e senha de novo por
+         * causa de um limite que ele nem caused, e o refresh token de 15 dias
+         * ia para o lixo junto.
+         *
+         * Erro transitório mantém os tokens e a tela segue protegida — a
+         * rota protegida espera o `loading` baixar, e o usuário só é jogado
+         * para o login se o token realmente não servir mais.
+         */
+        if (isAuthFailure(err)) {
+          clearAuth();
+        } else {
+          setSessionError(
+            err instanceof Error && err.message
+              ? err.message
+              : 'A conexão falhou ao carregar sua conta.'
+          );
+        }
       } finally {
         setLoading(false);
       }
@@ -65,13 +101,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     // refreshSession() dispara este evento quando o refresh token também
     // expirou — aí sim a sessão acabou de verdade.
-    const onExpired = () => setState({
-      user: null,
-      accessToken: null,
-      refreshToken: null,
-      isAuthenticated: false,
-      role: null,
-    });
+    const onExpired = () => {
+      setSessionError(null);
+      setState({
+        user: null,
+        accessToken: null,
+        refreshToken: null,
+        isAuthenticated: false,
+        role: null,
+      });
+    };
 
     window.addEventListener('session-expired', onExpired);
     return () => window.removeEventListener('session-expired', onExpired);
@@ -80,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const clearAuth = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
+    setSessionError(null);
     setState({
       user: null,
       accessToken: null,
@@ -158,25 +198,51 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearAuth();
   };
 
+  /**
+   * Revalida a sessão a partir dos tokens que já estão no navegador.
+   *
+   * Serve ao botão "Tentar novamente" da tela de falha passageira: não pede
+   * senha de novo, só refaz a consulta. Também é o `retry` da reidratação.
+   */
   const refreshAuth = useCallback(async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) return;
+    if (!localStorage.getItem('accessToken') || !localStorage.getItem('refreshToken')) {
+      setSessionError(null);
+      return;
+    }
 
+    setLoading(true);
     try {
-      const res = await authApi.refreshToken(refreshToken);
-      saveTokens(res.accessToken, res.refreshToken);
-      setState((prev: AuthState) => ({
-        ...prev,
-        accessToken: res.accessToken,
-        refreshToken: res.refreshToken,
-      }));
-    } catch {
-      clearAuth();
+      const res = await authApi.getMe();
+      const user = 'user' in res ? res.user : res.client;
+      const role = 'user' in res ? res.user.role : ('CLIENT' as const);
+
+      setSessionError(null);
+      setState({
+        user,
+        accessToken: localStorage.getItem('accessToken'),
+        refreshToken: localStorage.getItem('refreshToken'),
+        isAuthenticated: true,
+        role,
+      });
+    } catch (err) {
+      if (isAuthFailure(err)) {
+        // Token recusado de verdade: agora sim a sessão acabou.
+        clearAuth();
+        setSessionError(null);
+      } else {
+        setSessionError(
+          err instanceof Error && err.message
+            ? err.message
+            : 'A conexão falhou ao carregar sua conta.'
+        );
+      }
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, loading, loginOwner, loginEmployee, requestClientCode, verifyClientCode, logout, refreshAuth }}>
+    <AuthContext.Provider value={{ ...state, loading, sessionError, loginOwner, loginEmployee, requestClientCode, verifyClientCode, logout, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );

@@ -424,6 +424,33 @@ describe('Validation Schemas', () => {
     it('should reject unknown period', () => {
       expect(() => financialQuerySchema.parse({ period: 'week' })).toThrow();
     });
+
+    /**
+     * A referência tem de continuar como STRING.
+     *
+     * Com `z.coerce.date()`, "2026-10-01" virava Date em UTC — meia-noite UTC
+     * é 30/09 em São Paulo — e o financeiro do dia 1º do mês abria o mês
+     * ANTERIOR, sem erro nenhum, só um número que não bate com a agenda. Ver
+     * `resolvePeriod` nos testes do serviço financeiro.
+     */
+    it('mantém a reference como string, sem converter para Date', () => {
+      const parsed = financialQuerySchema.parse({ period: 'month', reference: '2026-10-01' });
+      expect(typeof parsed.reference).toBe('string');
+      expect(parsed.reference).toBe('2026-10-01');
+    });
+
+    it('aceita ISO completo com offset', () => {
+      const parsed = financialQuerySchema.parse({
+        period: 'day',
+        reference: '2026-10-01T12:00:00-03:00',
+      });
+      expect(parsed.reference).toBe('2026-10-01T12:00:00-03:00');
+    });
+
+    it('rejeita reference malformada', () => {
+      expect(() => financialQuerySchema.parse({ reference: '01/10/2026' })).toThrow();
+      expect(() => financialQuerySchema.parse({ reference: 'ontem' })).toThrow();
+    });
   });
 
   describe('acesso aos dados do salão', () => {

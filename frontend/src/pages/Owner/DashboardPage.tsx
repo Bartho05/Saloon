@@ -103,7 +103,9 @@ export function OwnerDashboardPage() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-10">
+      {/* `auto-rows-fr` mantém as linhas com a mesma altura em 2 e 3 colunas,
+          onde a grade quebra e cada linha se dimensionaria pelo seu conteúdo. */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-10 auto-rows-fr">
         <StatCard size="sm" label="Agendamentos hoje" value={stats.todayCount} />
         <StatCard size="sm" label="Faturamento hoje" value={formatCurrency(stats.todayRevenue)} />
         <StatCard size="sm" label="Agendamentos no mês" value={stats.monthCount} />

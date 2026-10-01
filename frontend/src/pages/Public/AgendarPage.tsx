@@ -207,8 +207,10 @@ export function AgendarPage() {
       return (
         <div className="space-y-6">
           <Badge variant="outline" className="mb-2">SEUS DADOS</Badge>
-          <Card variant="padded" className="text-center py-8">
-            <CardContent>
+          {/* Sem `variant="padded"`: o padding é do CardContent, e os dois
+              juntos davam 56px — o cartão ficava largo e o avatar solto. */}
+          <Card className="text-center">
+            <CardContent className="py-10">
               <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-brand-grayLight border border-brand-gray flex items-center justify-center">
                 <span className="font-display font-bold text-display-sm text-brand-grayMid">
                   {clientExists.fullName.charAt(0)}

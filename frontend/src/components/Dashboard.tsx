@@ -53,10 +53,22 @@ interface StatCardProps {
   size?: 'sm' | 'md';
 }
 
+/**
+ * Card de número.
+ *
+ * `flex flex-col h-full` com a dica em `mt-auto` é o que impede a grade de
+ * ficar desalinhada: o card COM dica era 22px mais alto que o sem, e como
+ * cada linha da grade tem altura própria, os dois cards de cima ficavam
+ * diferentes dos dois de baixo. Agora a dica desce para a base e o número fica
+ * sempre logo abaixo do rótulo, em qualquer card.
+ *
+ * As grades que usam este componente precisam de `auto-rows-fr` para as linhas
+ * terem a mesma altura.
+ */
 export function StatCard({ label, value, hint, size = 'md' }: StatCardProps) {
   return (
     <Card variant="hover">
-      <CardContent>
+      <CardContent className="flex flex-col h-full">
         <p className="font-display text-caption text-brand-grayMid">{label}</p>
         {/* Escala responsiva: em grids de 2 colunas no mobile o card fica com
             ~120px de conteudo, e "R$ 1.820,00" a 24px nao cabe. O
@@ -68,7 +80,7 @@ export function StatCard({ label, value, hint, size = 'md' }: StatCardProps) {
         >
           {value}
         </p>
-        {hint && <p className="text-caption text-brand-grayMid mt-1">{hint}</p>}
+        {hint && <p className="text-caption text-brand-grayMid mt-auto pt-1">{hint}</p>}
       </CardContent>
     </Card>
   );

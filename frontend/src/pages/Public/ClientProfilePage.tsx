@@ -98,7 +98,7 @@ export function ClientProfilePage() {
         </Card>
 
         <div className="lg:col-span-2 space-y-6">
-          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 auto-rows-fr">
             <StatCard size="sm" label="Agendamentos futuros" value={upcoming.length} />
             <StatCard size="sm" label="Atendimentos concluídos" value={done.length} />
             <StatCard size="sm" label="Total investido" value={totalSpent.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} />

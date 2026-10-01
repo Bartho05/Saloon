@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ownerApi } from '@services/api';
 import type { OwnerFinancialOverview } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
@@ -8,9 +8,22 @@ import { Card, CardContent, Container, BarChart, ProgressBar } from '@components
 import { PageHeader, StatCard, PageSpinner, EmptyState, StatusBadge } from '@components/Dashboard';
 import { PeriodSelector, type Period } from '@components/PeriodSelector';
 
+/** Hoje no fuso do navegador, em ISO curto. */
+function todayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+const SERIES_AXIS: Record<Period, string> = {
+  day: 'Faturamento por hora',
+  month: 'Faturamento por dia',
+  year: 'Faturamento por mês',
+};
+
 export function OwnerFinancialPage() {
   const { showToast } = useToast();
   const [period, setPeriod] = useState<Period>('month');
+  const [reference, setReference] = useState(todayIso);
   const [data, setData] = useState<OwnerFinancialOverview | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,7 +33,7 @@ export function OwnerFinancialPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await ownerApi.getFinancial(period);
+        const res = await ownerApi.getFinancial(period, reference);
         if (!cancelled) setData(res.financial);
       } catch (err: any) {
         if (!cancelled) showToast({ type: 'error', title: 'Erro', message: err.message });
@@ -31,14 +44,22 @@ export function OwnerFinancialPage() {
 
     void load();
     return () => { cancelled = true; };
-  }, [period, showToast]);
+  }, [period, reference, showToast]);
 
+  /**
+   * Os rótulos vêm prontos do servidor, formatados no fuso do salão.
+   *
+   * Antes o front fazia `new Date(d.date).toLocaleDateString(...)`: a chave
+   * "2026-10-01" é meia-noite UTC e em São Paulo (UTC-3) saía 30/09 — o dia
+   * ao lado do dia errado, sem nenhum aviso.
+   */
   const chartData = useMemo(() => {
     if (!data) return [];
-    return data.daily.map((d) => ({
-      label: new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-      value: d.revenue,
-      meta: `${d.count} atendimento${d.count !== 1 ? 's' : ''}`,
+    return data.series.map((p) => ({
+      label: p.label,
+      value: p.revenue,
+      fullLabel: p.fullLabel,
+      meta: `${p.fullLabel} · ${p.count} atendimento${p.count !== 1 ? 's' : ''}`,
     }));
   }, [data]);
 
@@ -47,32 +68,63 @@ export function OwnerFinancialPage() {
     [data]
   );
 
+  // Enquanto troca o período, os números antigos ficam na tela com a lista
+  // nova chegando depois: dariam a impressão de total errado.
+  const trocando = loading && !!data;
+
+  const onPeriodChange = useCallback((p: Period) => {
+    setPeriod(p);
+    // Trocar de granularidade mantendo a data faz sentido: o dia 15 continua
+    // sendo dia 15, agora visto como mês ou ano.
+  }, []);
+
   if (loading && !data) return <PageSpinner />;
 
   return (
     <Container size="full" className="!px-0">
       <PageHeader
         title="Financeiro"
-        description={data ? `Faturamento do salão — ${data.label}` : 'Faturamento do salão'}
-        action={<PeriodSelector value={period} onChange={setPeriod} />}
+        // A descrição não repete o período: o seletor já mostra o rótulo
+        // ("Outubro de 2026") logo ao lado. Duas vezes o mesmo texto na mesma
+        // linha é ruído, e o usuário não sabe qual dos dois manda.
+        description="Faturamento do salão por período"
+        action={
+          <PeriodSelector
+            value={period}
+            onChange={onPeriodChange}
+            reference={reference}
+            onReferenceChange={setReference}
+            label={data?.label}
+          />
+        }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
-        <StatCard size="sm" label="Faturamento total" value={formatCurrency(data?.totals.revenue ?? 0)} />
-        <StatCard size="sm" label="Atendimentos concluídos" value={data?.totals.appointments ?? 0} />
+      {/* `auto-rows-fr`: sem ela, a linha de cima (cards sem dica) ficava
+          22px mais baixa que a de baixo (cards com dica) e a grade saía
+          desalinhada — que é o que se vê ao olhar o painel. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 auto-rows-fr">
+        <StatCard size="sm" label="Faturamento" value={formatCurrency(data?.totals.revenue ?? 0)} />
+        <StatCard size="sm" label="Concluídos" value={data?.totals.appointments ?? 0} />
         <StatCard size="sm" label="Ticket médio" value={formatCurrency(data?.totals.averageTicket ?? 0)} />
+        <StatCard
+          size="sm"
+          label="A receber"
+          value={formatCurrency(data?.totals.scheduled ?? 0)}
+          hint="Agendado, ainda não concluído"
+        />
       </div>
 
       <Card className="mb-6">
         <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
-          <h2 className="font-display font-semibold text-body">Faturamento por dia</h2>
+          <h2 className="font-display font-semibold text-body">{SERIES_AXIS[period]}</h2>
         </div>
-        <CardContent>
+        <CardContent className={trocando ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
           <BarChart
             data={chartData}
             height={200}
             formatValue={formatCurrency}
             emptyMessage="Nenhum atendimento concluído neste período"
+            axisTitle={SERIES_AXIS[period]}
           />
         </CardContent>
       </Card>
@@ -112,7 +164,7 @@ export function OwnerFinancialPage() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <p className="font-display font-medium text-body">{emp.name}</p>
+                      <p className="font-display font-medium text-body truncate">{emp.name}</p>
                       <div className="mt-2">
                         <ProgressBar value={emp.revenue} total={maxEmployeeRevenue} showLabel={false} />
                       </div>
@@ -121,7 +173,7 @@ export function OwnerFinancialPage() {
                         {formatCurrency(emp.averageTicket)}
                       </p>
                     </div>
-                    <span className="font-display font-medium text-body flex-shrink-0">
+                    <span className="font-display font-medium text-body flex-shrink-0 tabular-nums">
                       {formatCurrency(emp.revenue)}
                     </span>
                   </div>
@@ -149,12 +201,12 @@ export function OwnerFinancialPage() {
                   className="px-5 md:px-6 py-4 border-b border-brand-gray last:border-b-0 flex items-center justify-between gap-4 hover:bg-brand-grayLight transition-colors duration-fast"
                 >
                   <div className="min-w-0">
-                    <p className="font-display font-medium text-body-sm">{svc.name}</p>
+                    <p className="font-display font-medium text-body-sm truncate">{svc.name}</p>
                     <p className="text-caption text-brand-grayMid mt-0.5">
                       {svc.count} atendimento{svc.count !== 1 ? 's' : ''}
                     </p>
                   </div>
-                  <span className="font-display font-medium text-body-sm flex-shrink-0">
+                  <span className="font-display font-medium text-body-sm flex-shrink-0 tabular-nums">
                     {formatCurrency(svc.revenue)}
                   </span>
                 </li>
@@ -170,9 +222,15 @@ export function OwnerFinancialPage() {
           atendimento. A lista responde a pergunta diretamente. */}
       <Card className="mt-6">
         <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
-          <h2 className="font-display font-semibold text-body">Agendamentos do período</h2>
+          <h2 className="font-display font-semibold text-body">
+            {period === 'day' ? 'Agendamentos do dia' : 'Agendamentos do período'}
+          </h2>
           <p className="text-caption text-brand-grayMid mt-0.5">
             {data?.appointments.length ?? 0} registro{(data?.appointments.length ?? 0) !== 1 ? 's' : ''}
+            {' · '}
+            {data?.totals.completed ?? 0} concluído{(data?.totals.completed ?? 0) !== 1 ? 's' : ''}
+            {' · '}
+            {(data?.appointments.length ?? 0) - (data?.totals.completed ?? 0)} em aberto
           </p>
         </div>
 
@@ -180,6 +238,19 @@ export function OwnerFinancialPage() {
           <EmptyState
             title="Nenhum agendamento no período"
             description="Assim que houver agendamentos, eles aparecem aqui com cliente, serviço e valor."
+            action={
+              // Sem isto o dono fica preso: o período pode estar vazio e não
+              // haver botão nenhum para voltar ao de hoje.
+              reference !== todayIso() ? (
+                <button
+                  type="button"
+                  onClick={() => setReference(todayIso())}
+                  className="text-body-sm underline underline-offset-4 hover:text-brand-black transition-colors duration-fast"
+                >
+                  Voltar para hoje
+                </button>
+              ) : undefined
+            }
           />
         ) : (
           <ul>

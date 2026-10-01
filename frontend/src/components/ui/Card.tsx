@@ -4,6 +4,14 @@ interface CardProps extends HTMLAttributes<HTMLDivElement> {
   variant?: 'default' | 'padded' | 'hover';
 }
 
+/**
+ * Variantes do invólucro.
+ *
+ * - `default`: só a moldura. O padding vem do `CardContent`.
+ * - `hover`: idem, mais o efeito de levantar. Para usar com `CardContent`.
+ * - `padded`: a moldura JÁ com padding, para conteúdo cru (estado vazio).
+ *   Não usar junto com `CardContent` — o padding sai em dobro.
+ */
 const variantClasses = {
   default: 'card',
   padded: 'card-padded',
@@ -56,7 +64,8 @@ CardDescription.displayName = 'CardDescription';
  * o corpo não deveria ter que lembrar de afastar o texto da borda.
  *
  * Usado dentro de `<Card variant="padded">` daria padding em dobro; por
- * isso essas chamadas migraram para `<Card>`.
+ * isso o `Card` normal não tem padding e estas chamadas combinam as duas
+ * peças.
  */
 export const CardContent = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className = '', ...props }, ref) => (

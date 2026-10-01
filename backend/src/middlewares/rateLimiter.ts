@@ -16,11 +16,26 @@ import { env } from '@config/env';
 const isTest = env.NODE_ENV === 'test';
 const skipInTests = () => isTest;
 
+/**
+ * Limite global.
+ *
+ * O valor padrão anterior era 100 requisições por 15 minutos — cerca de 7 por
+ * minuto. Uma tela do painel já dispara de 2 a 4 chamadas (dados da página +
+ * perfil + configuração do salão), então navegar por cinco telas já estourava
+ * a cota. O efeito prático era o dono ser jogado para a tela de login no meio
+ * do trabalho, sem ele ter feito nada de errado.
+ *
+ * O limite existe para conter script abusing a API, não para contar a
+ * navegação de uma pessoa. 600 por 15 minutos dá folga para uso intenso
+ * (uma tela a cada 2 segundos, o que ninguém faz) e ainda derruba loop.
+ *
+ * Quem quiser apertar, ajusta por variável de ambiente.
+ */
 export const globalRateLimiter = rateLimit({
   windowMs: env.RATE_LIMIT_WINDOW_MS,
   max: env.RATE_LIMIT_MAX_REQUESTS,
   message: {
-    error: 'Muitas requisições. Tente novamente mais tarde.',
+    error: 'Você fez muitas requisições em pouco tempo. Aguarde alguns instantes e tente de novo.',
     code: 'RATE_LIMIT_EXCEEDED',
   },
   standardHeaders: true,

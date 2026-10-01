@@ -156,13 +156,11 @@ export async function runReminderJob(req: AuthRequest, res: Response): Promise<v
 export async function getFinancialOverview(req: AuthRequest, res: Response): Promise<void> {
   const { period = 'month', reference } = req.query as {
     period?: 'day' | 'month' | 'year';
-    reference?: Date;
+    /** 'YYYY-MM-DD' crua: a conversão para o fuso do salão é do serviço. */
+    reference?: string;
   };
 
-  const overview = await getOwnerFinancialOverview(
-    period,
-    reference ?? new Date()
-  );
+  const overview = await getOwnerFinancialOverview(period, reference);
 
   res.json({ financial: overview });
 }

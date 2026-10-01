@@ -175,12 +175,18 @@
     @apply card hover:border-brand-black hover:shadow-elevated hover:-translate-y-0.5;
   }
 
+  /* Padding do card é responsabilidade de quem escreve o corpo
+     (`CardContent`), não do invólucro. `card-padded` existe só para o
+     conteúdo cru (estado vazio), que não tem CardContent. Aplicar os dois
+     somava 32px + 24px = 56px e os cards ficavam com o texto longe demais
+     da borda e desalinhados dos vizinhos. */
   .card-padded {
     @apply card p-6 md:p-8;
   }
 
+  /* Sem padding: use com CardContent. */
   .card-padded-hover {
-    @apply card-hover p-6 md:p-8;
+    @apply card-hover;
   }
 
   /* ========== BADGES / TAGS ========== */

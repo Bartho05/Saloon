@@ -29,8 +29,11 @@ const envSchema = z.object({
   EMAIL_FROM: z.string().email().optional(),
 
   // Rate Limiting
+  //
+  // 600 por 15 min ≈ 40/min. O padrão era 100 (≈7/min), que uma SPA estoura
+  // em cinco telas — ver comentário em `rateLimiter.ts`.
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
-  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
+  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(600),
 });
 
 export type Env = z.infer<typeof envSchema>;

@@ -8,9 +8,22 @@ import { Card, CardContent, Container, BarChart, ProgressBar } from '@components
 import { PageHeader, StatCard, PageSpinner, EmptyState, StatusBadge } from '@components/Dashboard';
 import { PeriodSelector, type Period } from '@components/PeriodSelector';
 
+/** Hoje no fuso do navegador, em ISO curto. */
+function todayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+}
+
+const SERIES_AXIS: Record<Period, string> = {
+  day: 'Faturamento por hora',
+  month: 'Faturamento por dia',
+  year: 'Faturamento por mês',
+};
+
 export function EmployeeFinancialPage() {
   const { showToast } = useToast();
   const [period, setPeriod] = useState<Period>('month');
+  const [reference, setReference] = useState(todayIso);
   const [data, setData] = useState<FinancialSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -20,7 +33,7 @@ export function EmployeeFinancialPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const res = await employeeApi.getFinancials(period);
+        const res = await employeeApi.getFinancials(period, reference);
         if (!cancelled) setData(res.financial);
       } catch (err: any) {
         if (!cancelled) showToast({ type: 'error', title: 'Erro', message: err.message });
@@ -31,14 +44,17 @@ export function EmployeeFinancialPage() {
 
     void load();
     return () => { cancelled = true; };
-  }, [period, showToast]);
+  }, [period, reference, showToast]);
 
+  // Rótulos prontos do servidor, no fuso do salão. Ver a nota na página do
+  // dono: remontar a data no front puxava o dia um para trás.
   const chartData = useMemo(() => {
     if (!data) return [];
-    return data.daily.map((d) => ({
-      label: new Date(d.date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
-      value: d.revenue,
-      meta: `${d.count} atendimento${d.count !== 1 ? 's' : ''}`,
+    return data.series.map((p) => ({
+      label: p.label,
+      value: p.revenue,
+      fullLabel: p.fullLabel,
+      meta: `${p.fullLabel} · ${p.count} atendimento${p.count !== 1 ? 's' : ''}`,
     }));
   }, [data]);
 
@@ -50,23 +66,37 @@ export function EmployeeFinancialPage() {
   if (loading && !data) return <PageSpinner />;
 
   const totals = data?.totals;
+  const trocando = loading && !!data;
 
   return (
     <Container size="full" className="!px-0">
       <PageHeader
         title="Meu Faturamento"
-        description="Quanto você produziu, por período"
-        action={<PeriodSelector value={period} onChange={setPeriod} />}
+        // O profissional precisa saber de que dia/mês os números são, senão
+        // não tem como conferir o fechamento.
+        description="Quanto você produzou, por período"
+        action={
+          <PeriodSelector
+            value={period}
+            onChange={setPeriod}
+            reference={reference}
+            onReferenceChange={setReference}
+            label={data?.label}
+          />
+        }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+      {/* `auto-rows-fr`: iguala a altura das linhas. Sem ela a linha com os
+          cards que têm dica ficava mais alta que a de cima, e a grade saía
+          desalinhada. */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8 auto-rows-fr">
         <StatCard size="sm" label="Faturamento" value={formatCurrency(totals?.revenue ?? 0)} />
-        <StatCard size="sm" label="Atendimentos concluídos" value={totals?.completed ?? 0} />
+        <StatCard size="sm" label="Concluídos" value={totals?.completed ?? 0} />
         <StatCard size="sm" label="Ticket médio" value={formatCurrency(totals?.averageTicket ?? 0)} />
         <StatCard
           size="sm"
-          label="Agendamentos no período"
-          value={totals?.appointments ?? 0}
+          label="A receber"
+          value={formatCurrency(totals?.scheduled ?? 0)}
           hint={`${totals?.cancelled ?? 0} cancelado(s)`}
         />
       </div>
@@ -74,17 +104,18 @@ export function EmployeeFinancialPage() {
       <div className="grid lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
-            <h2 className="font-display font-semibold text-body">Evolução do faturamento</h2>
+            <h2 className="font-display font-semibold text-body">{SERIES_AXIS[period]}</h2>
             <p className="text-caption text-brand-grayMid mt-0.5">
               Somente atendimentos concluídos
             </p>
           </div>
-          <CardContent>
+          <CardContent className={trocando ? 'opacity-50 transition-opacity' : 'transition-opacity'}>
             <BarChart
               data={chartData}
               height={200}
               formatValue={formatCurrency}
               emptyMessage="Nenhum atendimento concluído neste período"
+              axisTitle={SERIES_AXIS[period]}
             />
           </CardContent>
         </Card>
@@ -104,7 +135,7 @@ export function EmployeeFinancialPage() {
                   <li key={svc.serviceId}>
                     <div className="flex items-baseline justify-between gap-3 mb-2">
                       <span className="font-display text-body-sm">{svc.name}</span>
-                      <span className="font-display font-medium text-body-sm">
+                      <span className="font-display font-medium text-body-sm tabular-nums">
                         {formatCurrency(svc.revenue)}
                       </span>
                     </div>
@@ -128,9 +159,15 @@ export function EmployeeFinancialPage() {
           gráfico sozinho não mostra o que aconteceu. */}
       <Card className="mt-6">
         <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
-          <h2 className="font-display font-semibold text-body">Agendamentos do período</h2>
+          <h2 className="font-display font-semibold text-body">
+            {period === 'day' ? 'Agendamentos do dia' : 'Agendamentos do período'}
+          </h2>
           <p className="text-caption text-brand-grayMid mt-0.5">
             {data?.appointments.length ?? 0} registro{(data?.appointments.length ?? 0) !== 1 ? 's' : ''}
+            {' · '}
+            {totals?.completed ?? 0} concluído{(totals?.completed ?? 0) !== 1 ? 's' : ''}
+            {' · '}
+            {(data?.appointments.length ?? 0) - (totals?.completed ?? 0)} em aberto
           </p>
         </div>
 
@@ -138,6 +175,17 @@ export function EmployeeFinancialPage() {
           <EmptyState
             title="Nenhum agendamento no período"
             description="Quando você tiver atendimentos marcados, eles aparecem aqui."
+            action={
+              reference !== todayIso() ? (
+                <button
+                  type="button"
+                  onClick={() => setReference(todayIso())}
+                  className="text-body-sm underline underline-offset-4 hover:text-brand-black transition-colors duration-fast"
+                >
+                  Voltar para hoje
+                </button>
+              ) : undefined
+            }
           />
         ) : (
           <ul>

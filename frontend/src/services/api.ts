@@ -39,16 +39,24 @@ function refreshSession(): Promise<boolean> {
         body: JSON.stringify({ refreshToken }),
       });
 
-      if (!res.ok) {
+      /**
+       * Só encerra a sessão quando o refresh token é recusado de verdade.
+       * Um 429 ou 500 aqui é momentâneo — matar a sessão custaria 15 dias de
+       * login para o usuário resolver um limite de requisição.
+       */
+      if (res.status === 401 || res.status === 403) {
         clearSession();
         return false;
       }
+
+      if (!res.ok) return false;
 
       const data = await res.json();
       localStorage.setItem('accessToken', data.accessToken);
       localStorage.setItem('refreshToken', data.refreshToken);
       return true;
     } catch {
+      // Falha de rede: não é recusa do token, então a sessão continua.
       return false;
     } finally {
       refreshInFlight = null;
@@ -58,7 +66,7 @@ function refreshSession(): Promise<boolean> {
   return refreshInFlight;
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(
     public status: number,
     message: string,
@@ -67,6 +75,22 @@ class ApiError extends Error {
     super(message);
     this.name = 'ApiError';
   }
+}
+
+/**
+ * A falha significa "esta sessão não serve mais" — e só nesse caso a sessão
+ * deve ser destruída.
+ *
+ * 401/403: token recusado de fato (expirado sem refresh, revogado, ou conta
+ * desativada). Aí sim o logout é correto.
+ *
+ * Qualquer outra coisa é transitória e NÃO derruba a sessão: 429 do rate
+ * limiter, 500 do servidor e erro de rede são problemas do momento, não do
+ * token. Logar o usuário fora por causa disso apaga o refresh token de 15 dias
+ * e obriga a redigitar a senha.
+ */
+export function isAuthFailure(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 401 || err.status === 403);
 }
 
 async function request<T>(
@@ -291,8 +315,14 @@ export const ownerApi = {
     request<{ sent: number; failed: number }>('/owner/settings/run-reminder-job', { method: 'POST' }),
 
   // Financeiro
-  getFinancial: (period: 'day' | 'month' | 'year') =>
-    request<{ financial: OwnerFinancialOverview }>(`/owner/financial?period=${period}`),
+  /**
+   * `reference` (YYYY-MM-DD) é opcional e continua opcional: sem ele o
+   * servidor assume hoje, que é o comportamento antigo.
+   */
+  getFinancial: (period: 'day' | 'month' | 'year', reference?: string) =>
+    request<{ financial: OwnerFinancialOverview }>(
+      `/owner/financial?period=${period}${reference ? `&reference=${reference}` : ''}`
+    ),
 };
 
 // Employee
@@ -312,12 +342,16 @@ export const employeeApi = {
       method: 'PATCH',
       body: JSON.stringify({ status, notes }),
     }),
-  getFinancials: (period: 'day' | 'month' | 'year') =>
-    request<{ financial: FinancialSummary }>(`/employee/financial?period=${period}`),
+  getFinancials: (period: 'day' | 'month' | 'year', reference?: string) =>
+    request<{ financial: FinancialSummary }>(
+      `/employee/financial?period=${period}${reference ? `&reference=${reference}` : ''}`
+    ),
 };
 // Financeiro
 export interface FinancialSummary {
   period: 'day' | 'month' | 'year';
+  /** Rótulo do período, já no fuso do salão. */
+  label: string;
   range: { start: string; end: string };
   totals: {
     appointments: number;
@@ -326,11 +360,28 @@ export interface FinancialSummary {
     noShow: number;
     revenue: number;
     averageTicket: number;
+    /** Já agendado e ainda não concluído — o que pode virar receita. */
+    scheduled: number;
   };
   byService: Array<{ serviceId: string; name: string; count: number; revenue: number }>;
-  daily: Array<{ date: string; count: number; revenue: number }>;
+  /**
+   * Série do gráfico com a granularidade do período (hora / dia / mês) e densa
+   * — os periods sem atendimento vêm com `revenue: 0`, senão o gráfico mente
+   * sobre o ritmo. O `label` já vem formatado no fuso do salão pelo servidor.
+   */
+  series: FinancialSeriesPoint[];
   /** Agendamentos um a um — é o que a visão "dia" lista. */
   appointments: FinancialAppointment[];
+}
+
+export interface FinancialSeriesPoint {
+  key: string;
+  /** Vazio quando o salão está fechado no dia — o gráfico não rotula esse bucket. */
+  label: string;
+  fullLabel: string;
+  isOpen: boolean;
+  count: number;
+  revenue: number;
 }
 
 export interface FinancialAppointment {
@@ -351,7 +402,20 @@ export interface FinancialAppointment {
 export interface OwnerFinancialOverview {
   period: 'day' | 'month' | 'year';
   label: string;
-  totals: { revenue: number; appointments: number; averageTicket: number };
+  range: { start: string; end: string };
+  totals: {
+    revenue: number;
+    /** Atendimentos CONCLUÍDOS no período — é o que entrou no caixa. */
+    appointments: number;
+    /**
+     * O mesmo número, nomeado como é usado na tela. Sem isto a lista
+     * "N concluídos · N em aberto" precisaria inventar a conta, e ela erra:
+     * `appointments` aqui só conta concluídos, não todos os agendamentos.
+     */
+    completed: number;
+    averageTicket: number;
+    scheduled: number;
+  };
   employees: Array<{
     id: string;
     name: string;
@@ -362,13 +426,15 @@ export interface OwnerFinancialOverview {
     averageTicket: number;
   }>;
   byService: Array<{ name: string; count: number; revenue: number }>;
-  daily: Array<{ date: string; count: number; revenue: number }>;
+  series: FinancialSeriesPoint[];
   appointments: FinancialAppointment[];
 }
 
 export const financialApi = {
-  getOwnerOverview: (period: 'day' | 'month' | 'year') =>
-    request<{ financial: OwnerFinancialOverview }>(`/owner/financial?period=${period}`),
+  getOwnerOverview: (period: 'day' | 'month' | 'year', reference?: string) =>
+    request<{ financial: OwnerFinancialOverview }>(
+      `/owner/financial?period=${period}${reference ? `&reference=${reference}` : ''}`
+    ),
 };
 
 /**
@@ -437,5 +503,3 @@ export const publicApi = {
       };
     }>('/salon'),
 };
-
-export { ApiError };

@@ -161,7 +161,19 @@ export const updateSettingsSchema = z.object({
 // Financial schemas
 export const financialQuerySchema = z.object({
   period: z.enum(['day', 'month', 'year']).default('month'),
-  reference: z.coerce.date().optional(),
+  /**
+   * Data de referência em 'YYYY-MM-DD', ou ISO completo.
+   *
+   * NÃO usar `z.coerce.date()` aqui: o coercion entregaria um Date já em UTC,
+   * e `new Date('2026-10-01')` é meia-noite UTC — que em São Paulo é 30/09.
+   * O financeiro do dia 1º do mês abria o mês ANTERIOR, sem aviso. A string
+   * segue crua para o serviço interpretar no fuso do salão.
+   */
+  reference: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Data de referência deve ser YYYY-MM-DD')
+    .or(z.string().datetime({ offset: true }))
+    .optional(),
 });
 
 // UUID param schema

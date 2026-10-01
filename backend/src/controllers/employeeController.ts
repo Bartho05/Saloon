@@ -463,14 +463,11 @@ export async function getMyFinancials(req: AuthRequest, res: Response): Promise<
 
   const { period = 'month', reference } = req.query as {
     period?: 'day' | 'month' | 'year';
-    reference?: Date;
+    /** 'YYYY-MM-DD' crua: a conversão para o fuso do salão é do serviço. */
+    reference?: string;
   };
 
-  const summary = await getFinancialSummary(
-    entity.id,
-    period,
-    reference ?? new Date()
-  );
+  const summary = await getFinancialSummary(entity.id, period, reference);
 
   res.json({ financial: summary });
 }

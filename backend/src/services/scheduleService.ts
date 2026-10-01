@@ -143,10 +143,18 @@ export async function getAvailableSlots(
   const bufferMinutes = await getBufferMinutes();
 
   const daySlots = generateDaySlots(date, businessHours);
-  
+
+  // Um horário que já começou não pode mais ser escolhido. Filtrar aqui e
+  // não só na criação: às 22h a agenda do dia inteiro aparece como
+  // "disponível" e o cliente escolhe um horário que não existe mais.
+  const now = new Date();
+  const todaySlots = daySlots.map((slot) =>
+    slot.start.getTime() > now.getTime() ? slot : { ...slot, available: false }
+  );
+
   // Filtra slots disponíveis
   const availableSlots = filterAvailableSlots(
-    daySlots,
+    todaySlots,
     existingAppointments,
     service.durationMinutes,
     bufferMinutes
@@ -183,6 +191,16 @@ export async function validateBookingSlot(
 
   if (!service) {
     return { valid: false, error: 'Serviço não encontrado' };
+  }
+
+  // Horário já vencido. Esta é a guarda que vale: esconder os slots passados
+  // na listagem é conveniência, não proteção — o POST /booking/create aceita
+  // qualquer `startsAt`. Sem esta checagem dava para agendar 17:00 às 22:00.
+  if (startsAt.getTime() <= Date.now()) {
+    return {
+      valid: false,
+      error: 'Este horário já passou. Escolha outro dia ou horário.',
+    };
   }
 
   const endsAt = addMinutesToDate(startsAt, service.durationMinutes);

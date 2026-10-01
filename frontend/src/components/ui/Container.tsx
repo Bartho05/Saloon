@@ -9,7 +9,12 @@ const sizeClasses = {
   md: 'max-w-5xl',
   lg: 'max-w-7xl',
   xl: 'max-w-[80rem]',
-  full: 'max-full',
+  // NÃO é "sem limite". Em 2K e 4K o conteúdo esticado por 2560/3840px
+  // deixa os cards com uma linha de texto à esquerda e o resto vazio — o
+  // painel fica com aparência de template quebrado. O teto de 110rem
+  // (1760px) faz 2K e 4K mostrarem exatamente o mesmo layout do FullHD,
+  // centralizado, que é o que "consistente entre desktops" pede.
+  full: 'max-w-[110rem]',
 };
 
 export const Container = forwardRef<HTMLDivElement, ContainerProps>(

@@ -95,6 +95,39 @@ describe('Schedule Utils', () => {
       expect(slot1400?.available).toBe(true);
     });
 
+    it('should keep a slot the caller already marked unavailable as unavailable', () => {
+      // O chamador desmarca o que já passou ANTES de chamar esta função.
+      // Uma implementação que reescrevesse `available` com o resultado do
+      // conflito devolveria horário vencido como disponível — foi
+      // exatamente o que aconteceu: às 22h a agenda do dia inteiro seguia
+      // aparecendo como "disponível".
+      const slots = generateDaySlots(testDate, DEFAULT_BUSINESS_HOURS);
+      const semPassados = slots.map((s) => ({ ...s, available: false }));
+
+      const filtered = filterAvailableSlots(semPassados, [], 30, BUFFER_MINUTES);
+
+      expect(filtered.every((s) => s.available === false)).toBe(true);
+    });
+
+    it('should mark only the past slots, keeping future ones available', () => {
+      const agora = new Date();
+      const slots = generateDaySlots(agora, DEFAULT_BUSINESS_HOURS);
+
+      const filtrados = slots.map((slot) =>
+        slot.start.getTime() > agora.getTime() ? slot : { ...slot, available: false }
+      );
+      const resultado = filterAvailableSlots(filtrados, [], 30, BUFFER_MINUTES);
+
+      const passados = resultado.filter((s) => s.start.getTime() <= agora.getTime());
+      const futuros = resultado.filter((s) => s.start.getTime() > agora.getTime());
+
+      expect(passados.every((s) => s.available === false)).toBe(true);
+      // Se ainda houver horário futuro livre no dia, ele precisa continuar livre
+      if (futuros.length > 0) {
+        expect(futuros.some((s) => s.available)).toBe(true);
+      }
+    });
+
     it('should handle multiple appointments', () => {
       const slots = generateDaySlots(testDate, DEFAULT_BUSINESS_HOURS);
 

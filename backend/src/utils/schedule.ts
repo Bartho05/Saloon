@@ -80,7 +80,10 @@ export function filterAvailableSlots(
     // Verifica se o slot cabe até o fechamento
     const fitsInDay = !hasConflict && slotEnd <= slots[slots.length - 1]?.end;
 
-    return { ...slot, available: fitsInDay };
+    // Preserva a marcação que o slot já trazia. O chamador desmarca o que
+    // já passou antes de chamar esta função; sobrescrever com `fitsInDay`
+    // ignorava isso e devolvia horário vencido como disponível.
+    return { ...slot, available: slot.available && fitsInDay };
   });
 }
 

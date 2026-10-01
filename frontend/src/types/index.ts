@@ -121,11 +121,30 @@ export interface SalonSettings {
   timezone: string;
   birthdayMessage?: string;
   whatsappConfigured?: boolean;
+  /**
+   * A configuração do WhatsApp SEM os segredos.
+   *
+   * O servidor nunca devolve o token — nem mascarado, nem em parte. O que
+   * chega é o suficiente para o dono reconhecer a configuração e editar só o
+   * que quiser mudar, e a tela de configurações trata o campo de token em
+   * branco como "mantenha o que já está".
+   *
+   * `whatsappApiConfig` continua no tipo porque o `PATCH` envia esse formato;
+   * a resposta, não.
+   */
+  whatsapp?: {
+    provider: string | null;
+    instanceId: string | null;
+    apiUrl: string | null;
+    temToken: boolean;
+    temTokenDeSeguranca: boolean;
+  };
   whatsappApiConfig?: {
     provider: 'zapi' | 'evolution' | 'meta';
     instanceId: string;
     token: string;
     apiUrl: string;
+    clientToken?: string;
   } | null;
   cancellationHours: number;
   bufferMinutes: number;

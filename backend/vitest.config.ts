@@ -37,8 +37,20 @@ export default defineConfig({
       reporter: ['text', 'json', 'html'],
       exclude: ['src/tests/**', 'src/server.ts', 'prisma/**'],
     },
-    testTimeout: 10000,
-    hookTimeout: 10000,
+    /**
+     * 30s, e não os 10s que já estavam aqui.
+     *
+     * O `pool_timeout` do Prisma também é 10s. Com os dois iguais, uma consulta
+     * que ficou esperando conexão morria junto com o teste — e a falha apontava
+     * para a função testada, que estava lenta, não errada. O sintoma era
+     * `ConnectionReset (10054)` do PgBouncer do Supabase fechando conexão
+     * ociosa entre arquivos, e a suíte "falhava" sozinha, sem mudança no código.
+     *
+     * O teste agora tem folga para o pool responder. Se algo travar de verdade,
+     * 30s ainda é curto o bastante para o suite não ficar horas parado.
+     */
+    testTimeout: 30000,
+    hookTimeout: 30000,
   },
   resolve: {
     alias: {

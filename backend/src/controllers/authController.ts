@@ -15,9 +15,9 @@ import {
 } from '@utils/validation';
 import { sendVerificationCode, generateVerificationCode } from '@services/whatsappService';
 import { AppError } from '@middlewares/errorHandler';
-
-// Armazenamento temporário de códigos (em produção usar Redis)
-const verificationCodes = new Map<string, { code: string; expiresAt: Date }>();
+import * as audit from '@services/auditService';
+import { AuditAction } from '@services/auditService';
+import * as codigos from '@services/verificationCodeService';
 
 /**
  * POST /auth/owner/login
@@ -25,17 +25,46 @@ const verificationCodes = new Map<string, { code: string; expiresAt: Date }>();
  */
 export async function ownerLogin(req: Request, res: Response): Promise<void> {
   const { email, password } = req.body;
+  const ctx = audit.auditContextFrom(req);
 
   const owner = await prisma.user.findFirst({
     where: { email, role: 'OWNER', isActive: true },
   });
 
   if (!owner || !owner.passwordHash) {
+    await audit.record(
+      {
+        action: AuditAction.LOGIN_FAILED,
+        summary: 'Tentativa de entrar com senha errada',
+        entity: 'auth',
+        outcome: 'FAILURE',
+        actorKind: 'ANONYMOUS',
+        actorLabel: email,
+        metadata: { papel: 'OWNER' },
+      },
+      ctx
+    );
     throw new AppError('Email ou senha inválidos', 401, 'INVALID_CREDENTIALS');
   }
 
   const validPassword = await bcrypt.compare(password, owner.passwordHash);
   if (!validPassword) {
+    await audit.record(
+      {
+        action: AuditAction.LOGIN_FAILED,
+        summary: 'Tentativa de entrar com senha errada',
+        entity: 'auth',
+        outcome: 'FAILURE',
+        // A conta existe, e isso é informação útil dentro da casa: o dono precisa
+        // saber que alguém está batendo na conta DELE. Isso não vaza para fora,
+        // porque a resposta ao cliente continua sendo a mesma nos dois casos.
+        actorKind: 'OWNER',
+        actorId: owner.id,
+        actorLabel: owner.email,
+        metadata: { papel: 'OWNER' },
+      },
+      ctx
+    );
     throw new AppError('Email ou senha inválidos', 401, 'INVALID_CREDENTIALS');
   }
 
@@ -60,6 +89,19 @@ export async function ownerLogin(req: Request, res: Response): Promise<void> {
     // Sem efeito no login.
   }
 
+  await audit.record(
+    {
+      action: AuditAction.LOGIN,
+      summary: 'Entrou no painel do salão',
+      entity: 'auth',
+      actorKind: 'OWNER',
+      actorId: owner.id,
+      actorLabel: owner.name,
+      metadata: { papel: 'OWNER' },
+    },
+    ctx
+  );
+
   res.json({
     user: {
       id: owner.id,
@@ -82,12 +124,32 @@ export async function ownerLogin(req: Request, res: Response): Promise<void> {
  */
 export async function employeeLogin(req: Request, res: Response): Promise<void> {
   const accessCode = String(req.body.accessCode ?? '').trim();
+  const ctx = audit.auditContextFrom(req);
 
   const employee = await prisma.user.findFirst({
     where: { accessCode, role: 'EMPLOYEE', isActive: true },
   });
 
   if (!employee) {
+    /**
+     * O código do funcionário é curto e digitado à mão. Brutar seis dígitos é
+     * trivial para um script, e cada tentativa precisa ficar visível para o dono
+     * — é o aviso de que alguém está tentando entrar como profissional.
+     *
+     * A tentativa anônima também entra, sem id de conta: o e-mail pode nem
+     * existir, e a origem do acesso já vem em `ip`.
+     */
+    await audit.record(
+      {
+        action: AuditAction.LOGIN_FAILED,
+        summary: 'Tentou entrar com código de acesso inexistente',
+        entity: 'auth',
+        outcome: 'FAILURE',
+        actorKind: 'ANONYMOUS',
+        metadata: { papel: 'EMPLOYEE' },
+      },
+      ctx
+    );
     throw new AppError('Código de acesso inválido', 401, 'INVALID_ACCESS_CODE');
   }
 
@@ -96,6 +158,31 @@ export async function employeeLogin(req: Request, res: Response): Promise<void> 
     role: 'EMPLOYEE',
     employeeId: employee.id,
   });
+
+  // O acesso do profissional também é dado a conhecer: mostra que ele está
+  // ativo, quando foi a última vez e de onde, que é o que responde "por que a
+  // agenda dele parece abandonada".
+  try {
+    await prisma.user.update({
+      where: { id: employee.id },
+      data: { lastLoginAt: new Date() },
+    });
+  } catch {
+    // Sem efeito no login.
+  }
+
+  await audit.record(
+    {
+      action: AuditAction.LOGIN,
+      summary: 'Entrou no painel do profissional',
+      entity: 'auth',
+      actorKind: 'EMPLOYEE',
+      actorId: employee.id,
+      actorLabel: employee.name,
+      metadata: { papel: 'EMPLOYEE' },
+    },
+    ctx
+  );
 
   res.json({
     user: {
@@ -122,20 +209,58 @@ export async function clientRequestCode(req: Request, res: Response): Promise<vo
   const isDev = process.env.NODE_ENV !== 'production';
 
   const code = generateVerificationCode();
-  const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutos
 
-  verificationCodes.set(phone, { code, expiresAt });
+  /**
+   * Guarda ANTES de enviar.
+   *
+   * A ordem parece irrelevante e não é. Se o envio vier primeiro e a gravação
+   * falhar, o cliente recebe um código que o sistema não tem — e ele nunca
+   * consegue entrar, sem nenhuma pista do motivo. Guardando primeiro, o pior
+   * caso é o cliente pedir de novo, o que a tela oferece num clique.
+   */
+  await codigos.guarda(phone, code);
 
   // Envia por WhatsApp (imprime no terminal se não estiver configurado)
   const sent = await sendVerificationCode({ phone, code });
 
   if (!sent && !isDev) {
+    // Não configurado é o caso mais comum de falha aqui, e ele é VISÍVEL:
+    // sem instância e token, nenhuma mensagem sai e o dono não sabe por quê.
+    // Apagar o código evita que ele fique válido para um número que nunca o
+    // recebeu.
+    await codigos.descarta(phone);
+
+    await audit.record(
+      {
+        action: AuditAction.WHATSAPP_FAILED,
+        summary: 'Não foi possível enviar o código de verificação',
+        entity: 'whatsapp',
+        outcome: 'FAILURE',
+        actorKind: 'CLIENT',
+        actorLabel: phone,
+        metadata: { telefone: phone, uso: 'codigo de acesso' },
+      },
+      audit.auditContextFrom(req)
+    );
+
     throw new AppError(
       'Falha ao enviar código. Verifique a configuração do WhatsApp.',
       500,
       'WHATSAPP_ERROR'
     );
   }
+
+  await audit.record(
+    {
+      action: AuditAction.ACCESS_CODE_REQUESTED,
+      summary: 'Pediu código de verificação no WhatsApp',
+      entity: 'auth',
+      actorKind: 'CLIENT',
+      actorLabel: phone,
+      metadata: { telefone: phone, enviado: sent },
+    },
+    audit.auditContextFrom(req)
+  );
 
   if (isDev) {
     // Em desenvolvimento o código volta na resposta para facilitar os testes
@@ -153,23 +278,40 @@ export async function clientRequestCode(req: Request, res: Response): Promise<vo
 export async function clientVerifyCode(req: Request, res: Response): Promise<void> {
   const { phone, code } = req.body;
 
-  const stored = verificationCodes.get(phone);
+  const resultado = await codigos.verifica(phone, code);
 
-  if (!stored) {
-    throw new AppError('Código não solicitado ou expirado', 400, 'CODE_NOT_FOUND');
+  /**
+   * Uma resposta só, para todos os motivos.
+   *
+   * "Código não solicitado", "expirado" e "errado" devolvem o mesmo texto e o
+   * mesmo status. Divergir confirmaria que aquele telefone tem um pedido
+   * pendente — informação que ajuda quem está tentando entrar na conta alheia.
+   *
+   * O motivo verdadeiro vai para o log, que é interno.
+   */
+  if (!resultado.ok) {
+    const FRASE: Record<string, string> = {
+      NAO_PEDIDO: 'Código inválido. Solicite um novo.',
+      EXPIRADO: 'Código inválido. Solicite um novo.',
+      ERRADO: 'Código inválido. Solicite um novo.',
+      ESGOTADO: 'Código inválido. Solicite um novo.',
+    };
+
+    await audit.record(
+      {
+        action: AuditAction.LOGIN_FAILED,
+        summary: `Falhou ao confirmar o código: ${resultado.motivo}`,
+        entity: 'auth',
+        outcome: 'FAILURE',
+        actorKind: 'CLIENT',
+        actorLabel: phone,
+        metadata: { telefone: phone, motivo: resultado.motivo },
+      },
+      audit.auditContextFrom(req)
+    );
+
+    throw new AppError(FRASE[resultado.motivo], 400, 'INVALID_CODE');
   }
-
-  if (stored.expiresAt < new Date()) {
-    verificationCodes.delete(phone);
-    throw new AppError('Código expirado. Solicite um novo.', 400, 'CODE_EXPIRED');
-  }
-
-  if (stored.code !== code) {
-    throw new AppError('Código inválido', 400, 'INVALID_CODE');
-  }
-
-  // Código válido - remove do armazenamento
-  verificationCodes.delete(phone);
 
   // Busca ou cria cliente
   let client = await prisma.client.findUnique({
@@ -198,6 +340,18 @@ export async function clientVerifyCode(req: Request, res: Response): Promise<voi
       accessToken: null,
       refreshToken: null,
     });
+
+    await audit.record(
+      {
+        action: AuditAction.ACCESS_CODE_VERIFIED,
+        summary: 'Verificou o número. Telefone ainda sem cadastro, vai completar ao agendar',
+        entity: 'auth',
+        actorKind: 'CLIENT',
+        actorLabel: phone,
+        metadata: { telefone: phone, cadastroNovo: true },
+      },
+      audit.auditContextFrom(req)
+    );
     return;
   }
 
@@ -206,6 +360,19 @@ export async function clientVerifyCode(req: Request, res: Response): Promise<voi
     role: 'CLIENT',
     clientId: client.id,
   });
+
+  await audit.record(
+    {
+      action: AuditAction.ACCESS_CODE_VERIFIED,
+      summary: 'Entrou no painel do cliente',
+      entity: 'auth',
+      actorKind: 'CLIENT',
+      actorId: client.id,
+      actorLabel: client.fullName || phone,
+      metadata: { telefone: phone, cadastroNovo: false },
+    },
+    audit.auditContextFrom(req)
+  );
 
   res.json({
     client: {
@@ -278,6 +445,27 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
  */
 export async function logout(req: AuthRequest, res: Response): Promise<void> {
   // Em implementação completa, adicionar refresh token à blacklist no Redis
+  if (req.user) {
+    await audit.record(
+      {
+        action: AuditAction.LOGOUT,
+        summary: 'Saiu do painel',
+        entity: 'auth',
+        actorKind:
+          req.user.role === 'OWNER'
+            ? 'OWNER'
+            : req.user.role === 'EMPLOYEE'
+              ? 'EMPLOYEE'
+              : req.user.role === 'CLIENT'
+                ? 'CLIENT'
+                : 'SUPERADMIN',
+        actorId: req.user.sub,
+        metadata: { papel: req.user.role },
+      },
+      audit.auditContextFrom(req)
+    );
+  }
+
   res.json({ message: 'Logout realizado com sucesso' });
 }
 

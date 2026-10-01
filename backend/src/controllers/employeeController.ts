@@ -12,10 +12,60 @@ import { sendEmployeeAccessCode } from '@services/whatsappService';
 import { invalidateWhatsAppCache } from '@services/whatsappService';
 import { getFinancialSummary } from '@services/financialService';
 import { persistImage, removeImage } from '@services/uploadService';
+import * as audit from '@services/auditService';
+import { AuditAction } from '@services/auditService';
 
 function generateAccessCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
+
+/**
+ * Rótulos de campo, para o log falar português.
+ *
+ * O log grava a chave da coluna e a tela mostra isto. Sem a translation, quem lê
+ * "specialties" num registro de alteração não entende o que mudou — e o ponto
+ * de um log é ser lido por gente, não por quem escreveu a query.
+ */
+const CABELHO: Record<string, string> = {
+  name: 'o nome',
+  phone: 'o telefone',
+  specialties: 'os serviços',
+  isActive: 'a situação',
+  accessCode: 'o código de acesso',
+  email: 'o e-mail',
+};
+
+/**
+ * Monta a lista de campos que mudaram, lendo o estado anterior.
+ *
+ * Sem o "antes", o log só diria "alterou o profissional" — e a pergunta real,
+ * um mês depois, é sempre o que mudou de verdade. Uma troca de telefone e uma
+ * mudança de nome produzem a mesma linha, e uma delas é séria.
+ */
+function oQueMudou(antes: Record<string, unknown> | null, depois: Record<string, unknown>) {
+  if (!antes) return { campos: [] as string[], detalhe: null };
+
+  const campos: string[] = [];
+  const detalhe: Record<string, { de: unknown; para: unknown }> = {};
+
+  for (const [chave, para] of Object.entries(depois)) {
+    const de = antes[chave];
+    if (de === para) continue;
+    if (!(chave in CABELHO)) continue;
+    campos.push(CABELHO[chave]);
+    detalhe[chave] = { de: de ?? null, para: para ?? null };
+  }
+
+  return { campos, detalhe };
+}
+
+/** Só os campos que interessam para comparar; `select` do Prisma limita o resto. */
+const CAMPOS_COMPARADOS = {
+  name: true,
+  phone: true,
+  specialties: true,
+  isActive: true,
+} as const;
 
 /**
  * GET /owner/employees
@@ -92,6 +142,18 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
   // Verifica se telefone já existe
   const existingPhone = await prisma.user.findUnique({ where: { phone } });
   if (existingPhone) {
+    await audit.record(
+      {
+        action: AuditAction.EMPLOYEE_CREATED,
+        summary: `Tentou cadastrar um profissional com o telefone de ${existingPhone.name}, que já existe`,
+        entity: 'employee',
+        outcome: 'FAILURE',
+        actorKind: 'OWNER',
+        actorId: req.user?.sub ?? null,
+        metadata: { telefone: phone },
+      },
+      audit.auditContextFrom(req)
+    );
     throw new AppError('Telefone já cadastrado', 409, 'PHONE_EXISTS');
   }
 
@@ -126,6 +188,27 @@ export async function createEmployee(req: AuthRequest, res: Response): Promise<v
   if (settings) {
     await sendEmployeeAccessCode(phone, name, accessCode, settings.name);
   }
+
+  /**
+   * O código de acesso NÃO entra no registro.
+   *
+   * Ele é a senha do profissional: quem o tiver entra na agenda e no financeiro
+   * dele. Um log com o código seria uma senha guardada em texto numa tabela que
+   * todo mundo com acesso ao banco consegue ler — e o log justamente existe para
+   * ser lido por mais gente que a agenda.
+   */
+  await audit.record(
+    {
+      action: AuditAction.EMPLOYEE_CREATED,
+      summary: `Cadastrou o profissional ${name}`,
+      entity: 'employee',
+      entityId: employee.id,
+      actorKind: 'OWNER',
+      actorId: req.user?.sub ?? null,
+      metadata: { telefone: phone, servicos: specialties ?? [], codigoEnviado: Boolean(settings) },
+    },
+    audit.auditContextFrom(req)
+  );
 
   res.status(201).json({
     employee: {
@@ -180,9 +263,27 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
       where: { phone: data.phone, NOT: { id } },
     });
     if (existing) {
+      await audit.record(
+        {
+          action: AuditAction.EMPLOYEE_UPDATED,
+          summary: `Tentou usar o telefone de ${existing.name}, que já pertence a outro cadastro`,
+          entity: 'employee',
+          entityId: id,
+          outcome: 'FAILURE',
+          actorKind: 'OWNER',
+          actorId: req.user?.sub ?? null,
+          metadata: { telefoneTentado: data.phone },
+        },
+        audit.auditContextFrom(req)
+      );
       throw new AppError('Telefone já cadastrado', 409, 'PHONE_EXISTS');
     }
   }
+
+  const antes = await prisma.user.findUnique({
+    where: { id, role: 'EMPLOYEE' },
+    select: CAMPOS_COMPARADOS,
+  });
 
   const employee = await prisma.user.update({
     where: { id, role: 'EMPLOYEE' },
@@ -199,6 +300,23 @@ export async function updateEmployee(req: AuthRequest, res: Response): Promise<v
 
   // Invalida cache WhatsApp se config mudou
   invalidateWhatsAppCache();
+
+  const { campos, detalhe } = oQueMudou(antes, employee);
+
+  if (campos.length > 0) {
+    await audit.record(
+      {
+        action: AuditAction.EMPLOYEE_UPDATED,
+        summary: `Alterou ${campos.join(', ')} de ${employee.name}`,
+        entity: 'employee',
+        entityId: id,
+        actorKind: 'OWNER',
+        actorId: req.user?.sub ?? null,
+        metadata: { alteracoes: detalhe },
+      },
+      audit.auditContextFrom(req)
+    );
+  }
 
   res.json({ employee });
 }
@@ -228,6 +346,26 @@ export async function regenerateAccessCode(req: AuthRequest, res: Response): Pro
     await sendEmployeeAccessCode(employee.phone, employee.name, newAccessCode, settings.name);
   }
 
+  /**
+   * Trocar o código é a resposta para "perdi o acesso" e também para
+   * "alguém está entrando na minha conta". O registro precisa dizer qual dos dois
+   * foi — e o que decide isso é o motivo, que o dono informa.
+   *
+   * O código novo, como o antigo, não entra: só o fato de ter sido trocado.
+   */
+  await audit.record(
+    {
+      action: AuditAction.EMPLOYEE_ACCESS_CODE_REGENERATED,
+      summary: `Gerou novo código de acesso de ${employee.name}`,
+      entity: 'employee',
+      entityId: id,
+      actorKind: 'OWNER',
+      actorId: req.user?.sub ?? null,
+      metadata: { motivo: req.body?.motivo ?? null, codigoEnviado: Boolean(settings) },
+    },
+    audit.auditContextFrom(req)
+  );
+
   res.json({ employee });
 }
 
@@ -248,6 +386,25 @@ export async function deleteEmployee(req: AuthRequest, res: Response): Promise<v
   });
 
   if (futureAppointments > 0) {
+    const alvo = await prisma.user.findUnique({
+      where: { id, role: 'EMPLOYEE' },
+      select: { name: true },
+    });
+
+    await audit.record(
+      {
+        action: AuditAction.EMPLOYEE_DELETED,
+        summary: `Tentou desativar ${alvo?.name ?? 'um profissional'} com ${futureAppointments} agendamento(s) futuro(s)`,
+        entity: 'employee',
+        entityId: id,
+        outcome: 'FAILURE',
+        actorKind: 'OWNER',
+        actorId: req.user?.sub ?? null,
+        metadata: { agendamentosFuturos: futureAppointments },
+      },
+      audit.auditContextFrom(req)
+    );
+
     throw new AppError(
       'Não é possível desativar funcionário com agendamentos futuros',
       400,
@@ -255,10 +412,23 @@ export async function deleteEmployee(req: AuthRequest, res: Response): Promise<v
     );
   }
 
-  await prisma.user.update({
+  const desativado = await prisma.user.update({
     where: { id, role: 'EMPLOYEE' },
     data: { isActive: false },
+    select: { name: true },
   });
+
+  await audit.record(
+    {
+      action: AuditAction.EMPLOYEE_DELETED,
+      summary: `Desativou o profissional ${desativado.name}`,
+      entity: 'employee',
+      entityId: id,
+      actorKind: 'OWNER',
+      actorId: req.user?.sub ?? null,
+    },
+    audit.auditContextFrom(req)
+  );
 
   res.json({ message: 'Funcionário desativado com sucesso' });
 }
@@ -312,10 +482,17 @@ export async function uploadMyPhoto(req: AuthRequest, res: Response): Promise<vo
     select: { photoUrl: true },
   });
 
-  const photoUrl = persistImage(file.path, 'employees', entity.id);
+  const photoUrl = await persistImage(file.buffer, 'employees', entity.id, file.mimetype);
 
-  // remove a anterior só depois que a nova está no disco
-  removeImage(current?.photoUrl);
+  /**
+   * A anterior só é removida DEPOIS que a nova está guardada.
+   *
+   * A ordem é o que evita a foto sumir. Remover primeiro deixaria uma janela em
+   * que não há foto nenhuma — e se a gravação da nova falhasse depois, o
+   * profissional ficaria sem imagem até o próximo envio, sem nenhuma pista de
+   * que houve troca.
+   */
+  await removeImage(current?.photoUrl);
 
   const employee = await prisma.user.update({
     where: { id: entity.id },
@@ -332,6 +509,23 @@ export async function uploadMyPhoto(req: AuthRequest, res: Response): Promise<vo
     },
   });
 
+  // A foto é o que o cliente vê antes de marcar. Trocá-la é uma ação de
+  // confiança — e o log precisa dizer se foi o próprio profissional ou o dono,
+  // porque são situações bem diferentes.
+  await audit.record(
+    {
+      action: AuditAction.EMPLOYEE_PHOTO_CHANGED,
+      summary: 'Trocou a própria foto',
+      entity: 'employee',
+      entityId: entity.id,
+      actorKind: 'EMPLOYEE',
+      actorId: entity.id,
+      actorLabel: employee.name,
+      metadata: { trocou: Boolean(current?.photoUrl) },
+    },
+    audit.auditContextFrom(req)
+  );
+
   res.json({ employee });
 }
 
@@ -347,10 +541,10 @@ export async function removeMyPhoto(req: AuthRequest, res: Response): Promise<vo
 
   const current = await prisma.user.findUnique({
     where: { id: entity.id },
-    select: { photoUrl: true },
+    select: { photoUrl: true, name: true },
   });
 
-  removeImage(current?.photoUrl);
+  await removeImage(current?.photoUrl);
 
   const employee = await prisma.user.update({
     where: { id: entity.id },
@@ -366,6 +560,19 @@ export async function removeMyPhoto(req: AuthRequest, res: Response): Promise<vo
       createdAt: true,
     },
   });
+
+  await audit.record(
+    {
+      action: AuditAction.EMPLOYEE_PHOTO_CHANGED,
+      summary: 'Removeu a própria foto',
+      entity: 'employee',
+      entityId: entity.id,
+      actorKind: 'EMPLOYEE',
+      actorId: entity.id,
+      actorLabel: employee.name,
+    },
+    audit.auditContextFrom(req)
+  );
 
   res.json({ employee });
 }
@@ -387,12 +594,15 @@ export async function uploadEmployeePhoto(req: AuthRequest, res: Response): Prom
   });
 
   if (!current) {
-    removeImage(persistImage(file.path, 'employees', id));
+    // A imagem chegou mas não há a quem pertence. Guardar e apagar logo em
+    // seguida deixaria um arquivo órfão no Storage, ocupando bytes para sempre
+    // — sem ninguém apontando para ele e sem forma de limpá-lo depois.
+    await removeImage(await persistImage(file.buffer, 'employees', id, file.mimetype));
     throw new AppError('Funcionário não encontrado', 404, 'EMPLOYEE_NOT_FOUND');
   }
 
-  const photoUrl = persistImage(file.path, 'employees', id);
-  removeImage(current.photoUrl);
+  const photoUrl = await persistImage(file.buffer, 'employees', id, file.mimetype);
+  await removeImage(current.photoUrl);
 
   const employee = await prisma.user.update({
     where: { id },
@@ -408,6 +618,19 @@ export async function uploadEmployeePhoto(req: AuthRequest, res: Response): Prom
       createdAt: true,
     },
   });
+
+  await audit.record(
+    {
+      action: AuditAction.EMPLOYEE_PHOTO_CHANGED,
+      summary: `Trocou a foto de ${employee.name}`,
+      entity: 'employee',
+      entityId: id,
+      actorKind: 'OWNER',
+      actorId: req.user?.sub ?? null,
+      metadata: { trocou: Boolean(current.photoUrl) },
+    },
+    audit.auditContextFrom(req)
+  );
 
   res.json({ employee });
 }
@@ -428,7 +651,7 @@ export async function removeEmployeePhoto(req: AuthRequest, res: Response): Prom
     throw new AppError('Funcionário não encontrado', 404, 'EMPLOYEE_NOT_FOUND');
   }
 
-  removeImage(current.photoUrl);
+  await removeImage(current.photoUrl);
 
   const employee = await prisma.user.update({
     where: { id },
@@ -444,6 +667,18 @@ export async function removeEmployeePhoto(req: AuthRequest, res: Response): Prom
       createdAt: true,
     },
   });
+
+  await audit.record(
+    {
+      action: AuditAction.EMPLOYEE_PHOTO_CHANGED,
+      summary: `Removeu a foto de ${employee.name}`,
+      entity: 'employee',
+      entityId: id,
+      actorKind: 'OWNER',
+      actorId: req.user?.sub ?? null,
+    },
+    audit.auditContextFrom(req)
+  );
 
   res.json({ employee });
 }

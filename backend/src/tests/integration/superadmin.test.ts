@@ -20,7 +20,7 @@ describe('Superadmin — acesso de nível máximo', () => {
   let token: string;
 
   beforeEach(async () => {
-    await prisma.superAdminAudit.deleteMany({});
+    await prisma.auditLog.deleteMany({});
     await prisma.superAdmin.deleteMany({});
 
     codigo = generateAccessCode();
@@ -37,7 +37,7 @@ describe('Superadmin — acesso de nível máximo', () => {
   });
 
   afterAll(async () => {
-    await prisma.superAdminAudit.deleteMany({});
+    await prisma.auditLog.deleteMany({});
     await prisma.superAdmin.deleteMany({});
     await prisma.$disconnect();
   });
@@ -53,7 +53,13 @@ describe('Superadmin — acesso de nível máximo', () => {
       expect(res.body.code).toBe('INVALID_SEED');
       expect(await prisma.superAdmin.count()).toBe(0);
       // A tentativa fica registrada, mesmo sem conta correspondente.
-      expect(await prisma.superAdminAudit.count({ where: { action: 'BOOTSTRAP_DENIED' } })).toBe(1);
+      const registrada = await prisma.auditLog.findFirst({
+        where: { action: 'SUPERADMIN_BOOTSTRAP_DENIED' },
+      });
+      expect(registrada).not.toBeNull();
+      expect(registrada!.outcome).toBe('FAILURE');
+      expect(registrada!.actorKind).toBe('SUPERADMIN');
+      expect(registrada!.entity).toBe('superadmin');
     });
 
     it('cria o primeiro e devolve o código uma única vez', async () => {
@@ -444,9 +450,19 @@ describe('Superadmin — acesso de nível máximo', () => {
         .expect(200);
 
       const acoes = res.body.entries.map((e: { action: string }) => e.action);
-      expect(acoes).toContain('LOGIN_SUCCESS');
+      expect(acoes).toContain('LOGIN');
       expect(acoes).toContain('LOGIN_FAILED');
-      expect(acoes).toContain('CREATE_OWNER');
+      expect(acoes).toContain('OWNER_CREATED');
+
+      // A trilha é da instalação inteira, não só do superadmin: quem entrou é
+      // identificado pelo tipo, e não por uma tabela separada.
+      expect(res.body.entries.every((e: { actorKind: string }) => e.actorKind === 'SUPERADMIN')).toBe(
+        true
+      );
+
+      // A entrada traz a frase pronta para a tela, não um código para traduzir.
+      const entrada = res.body.entries.find((e: { action: string }) => e.action === 'OWNER_CREATED');
+      expect(entrada.summary).toContain('Dono Auditado');
 
       // Nem o código nem a senha entram na trilha.
       const dump = JSON.stringify(res.body);

@@ -8,10 +8,26 @@ import {
   lockDurationMs,
 } from '@services/superadminCrypto';
 import { env } from '@config/env';
+import {
+  record as recordAudit,
+  list as auditList,
+  AuditAction,
+  type AuditActionValue,
+  type AuditOutcome,
+} from '@services/auditService';
 
 export interface AuditContext {
   ip?: string;
   userAgent?: string;
+  /**
+   * Quem está chamando, quando a rota já sabe.
+   *
+   * Todas as ações daqui são do superadmin, então a identidade é a mesma em toda
+   * chamada e não vale a pena repetir em cada uma. A exceção é quando a ação é
+   * sobre outra conta (a que está sendo destravada), aí o id vem explícito.
+   */
+  actorId?: number | null;
+  actorLabel?: string | null;
 }
 
 export interface SuperAdminPublic {
@@ -26,32 +42,44 @@ export interface SuperAdminPublic {
   createdAt: string;
 }
 
+interface AuditExtras {
+  /** Sobrescreve o autor do contexto — usado quando a ação é sobre outra conta. */
+  actorId?: number | null;
+  actorLabel?: string | null;
+  outcome?: AuditOutcome;
+}
+
 /**
- * Registro de auditoria.
+ * Registro de auditoria do acesso máximo.
  *
- * Falha de escrita aqui NÃO pode derrubar a operação: perder um log é ruim,
- * mas derrubar o login do superadmin por causa do log seria pior. A exceção é
- * engolida de propósito e o problema fica no console.
+ * Delegado para a trilha única do sistema. O superadmin não tem log próprio: o
+ * que o distingue é `actorKind = 'SUPERADMIN'`, e não uma segunda tabela — duas
+ * tabelas de log só fariam a pergunta "qual dos dois eu olho?".
+ *
+ * Devolve a promessa para que os caminhos de erro usem `await`. Negar um login
+ * é justamente o registro que não pode evaporar.
  */
-async function audit(
-  action: string,
+function audit(
+  action: AuditActionValue,
+  summary: string,
   ctx: AuditContext,
-  detail?: string,
-  superAdminId?: number
+  extras: AuditExtras = {}
 ): Promise<void> {
-  try {
-    await prisma.superAdminAudit.create({
-      data: {
-        action,
-        ip: ctx.ip ?? null,
-        userAgent: ctx.userAgent?.slice(0, 300) ?? null,
-        detail: detail ?? null,
-        superAdminId: superAdminId ?? null,
-      },
-    });
-  } catch (err) {
-    console.error('[superadmin] falha ao gravar auditoria:', (err as Error).message);
-  }
+  const actorId = extras.actorId ?? ctx.actorId ?? null;
+
+  return recordAudit(
+    {
+      action,
+      summary,
+      entity: 'superadmin',
+      entityId: actorId != null ? String(actorId) : null,
+      outcome: extras.outcome ?? 'SUCCESS',
+      actorKind: 'SUPERADMIN',
+      actorId: actorId != null ? String(actorId) : null,
+      actorLabel: extras.actorLabel ?? ctx.actorLabel ?? null,
+    },
+    ctx
+  );
 }
 
 function toPublic(a: {
@@ -109,7 +137,13 @@ export async function bootstrapSuperAdmin(
   if (input.seed !== seed) {
     // Auditoria SEM o superAdminId: é justamente a tentativa que precisa ficar
     // registrada mesmo sem conta correspondente.
-    await audit('BOOTSTRAP_DENIED', ctx, `e-mail informado: ${input.email}`);    throw new AppError('Semente inválida', 401, 'INVALID_SEED');
+    await audit(
+      AuditAction.SUPERADMIN_BOOTSTRAP_DENIED,
+      `Instalação recusada. E-mail informado: ${input.email}`,
+      ctx,
+      { actorLabel: input.email, outcome: 'FAILURE' }
+    );
+    throw new AppError('Semente inválida', 401, 'INVALID_SEED');
   }
 
   if (await hasAnySuperAdmin()) {
@@ -134,7 +168,10 @@ export async function bootstrapSuperAdmin(
     },
   });
 
-  await audit('BOOTSTRAP', ctx, `superadmin criado: ${email}`, created.id);
+  void audit(AuditAction.SUPERADMIN_BOOTSTRAP, `Primeiro acesso criado: ${email}`, ctx, {
+    actorId: created.id,
+    actorLabel: email,
+  });
 
   // O código volta em texto uma única vez, aqui. Nem o banco nem nenhum log
   // o guardam: se o operador perder, a saída é rotacionar.
@@ -162,13 +199,23 @@ export async function loginWithCode(
   // rápida revelaria que o e-mail não existe.
   if (!admin) {
     await hashCode(code);
-    await audit('LOGIN_FAILED', ctx, `e-mail inexistente: ${email}`);
+    await audit(
+      AuditAction.LOGIN_FAILED,
+      `E-mail não cadastrado: ${email}`,
+      ctx,
+      { actorLabel: email, outcome: 'FAILURE' }
+    );
     throw new AppError('E-mail ou código inválido', 401, 'INVALID_CREDENTIALS');
   }
 
   if (admin.lockedUntil && admin.lockedUntil > new Date()) {
     const minutos = Math.ceil((admin.lockedUntil.getTime() - Date.now()) / 60000);
-    await audit('LOCKED', ctx, `${email} — travado por mais ${minutos} min`, admin.id);
+    await audit(
+      AuditAction.ACCOUNT_LOCKED,
+      `Tentou entrar com a conta travada. Faltam ${minutos} min`,
+      ctx,
+      { actorId: admin.id, actorLabel: email, outcome: 'FAILURE' }
+    );
     throw new AppError(
       `Conta travada por excesso de tentativas. Tente em ${minutos} minuto(s).`,
       429,
@@ -177,7 +224,12 @@ export async function loginWithCode(
   }
 
   if (!admin.isActive) {
-    await audit('LOGIN_FAILED', ctx, `${email} — conta desativada`, admin.id);
+    await audit(
+      AuditAction.LOGIN_FAILED,
+      'Tentou entrar com a conta desativada',
+      ctx,
+      { actorId: admin.id, actorLabel: email, outcome: 'FAILURE' }
+    );
     throw new AppError('E-mail ou código inválido', 401, 'INVALID_CREDENTIALS');
   }
 
@@ -197,10 +249,10 @@ export async function loginWithCode(
     });
 
     await audit(
-      'LOGIN_FAILED',
+      AuditAction.LOGIN_FAILED,
+      `${falhas}ª tentativa com código errado${lockedUntil ? `, conta travada até ${lockedUntil.toISOString()}` : ''}`,
       ctx,
-      `${email} — ${falhas}ª falha${lockedUntil ? `, travado até ${lockedUntil.toISOString()}` : ''}`,
-      admin.id
+      { actorId: admin.id, actorLabel: email, outcome: 'FAILURE' }
     );
 
     // Mensagem genérica de propósito: confirmar "código errado" já é o bastante
@@ -213,7 +265,10 @@ export async function loginWithCode(
     data: { failedAttempts: 0, lockedUntil: null, lastLoginAt: new Date() },
   });
 
-  await audit('LOGIN_SUCCESS', ctx, email, admin.id);
+  void audit(AuditAction.LOGIN, 'Entrou no painel administrativo', ctx, {
+    actorId: admin.id,
+    actorLabel: email,
+  });
 
   return { superAdminId: admin.id, email: admin.email, name: admin.name };
 }
@@ -243,7 +298,12 @@ export async function rotateCode(
     },
   });
 
-  await audit('ROTATE_CODE', ctx, `código anterior ${admin.codeFingerprint} → ${fingerprint}`, superAdminId);
+  void audit(
+    AuditAction.SUPERADMIN_CODE_ROTATED,
+    `Código trocado. Impressão ${admin.codeFingerprint} → ${fingerprint}`,
+    ctx,
+    { actorId: superAdminId, actorLabel: admin.email }
+  );
 
   return { accessCode: code, superAdmin: toPublic(updated) };
 }
@@ -265,7 +325,12 @@ export async function setActive(
   ctx: AuditContext
 ): Promise<SuperAdminPublic> {
   const updated = await prisma.superAdmin.update({ where: { id }, data: { isActive } });
-  await audit(isActive ? 'ACTIVATE' : 'DEACTIVATE', ctx, updated.email, id);
+  void audit(
+    isActive ? AuditAction.SUPERADMIN_ACTIVATED : AuditAction.SUPERADMIN_DEACTIVATED,
+    isActive ? `Conta reativada: ${updated.email}` : `Conta desativada: ${updated.email}`,
+    ctx,
+    { actorId: id, actorLabel: updated.email }
+  );
   return toPublic(updated);
 }
 
@@ -275,27 +340,23 @@ export async function unlock(id: number, ctx: AuditContext): Promise<SuperAdminP
     where: { id },
     data: { failedAttempts: 0, lockedUntil: null },
   });
-  await audit('UNLOCK', ctx, updated.email, id);
+  void audit(AuditAction.SUPERADMIN_UNLOCKED, `Conta destravada: ${updated.email}`, ctx, {
+    actorId: id,
+    actorLabel: updated.email,
+  });
   return toPublic(updated);
 }
 
-/** Trilha de auditoria, mais recente primeiro. */
-export async function listAudit(limit = 100) {
-  const rows = await prisma.superAdminAudit.findMany({
-    orderBy: { createdAt: 'desc' },
-    take: Math.min(Math.max(limit, 1), 500),
-    include: { superAdmin: { select: { name: true, email: true } } },
-  });
-
-  return rows.map((r) => ({
-    id: r.id,
-    action: r.action,
-    ip: r.ip,
-    userAgent: r.userAgent,
-    detail: r.detail,
-    createdAt: r.createdAt.toISOString(),
-    superAdmin: r.superAdmin ? { name: r.superAdmin.name, email: r.superAdmin.email } : null,
-  }));
+/**
+ * Trilha de auditoria.
+ *
+ * A tela do superadmin continua existindo porque é onde se procura "quem me
+ * trancou?" e "o que esse acesso fez?", mas os dados vêm da tabela única. A
+ * rota do sistema inteiro, com filtros por ação e por tipo de autor, é a mesma
+ * função — a diferença é só o filtro aplicado.
+ */
+export async function listAudit(limit = 100, offset = 0) {
+  return auditList({ actorKind: 'SUPERADMIN', limit, offset });
 }
 
 /**
@@ -324,7 +385,9 @@ export async function systemStatus() {
     prisma.appointment.count(),
     prisma.salonSettings.findUnique({ where: { id: 1 }, select: { name: true } }),
     prisma.superAdmin.findFirst({ orderBy: { lastLoginAt: 'desc' }, select: { lastLoginAt: true } }),
-    prisma.superAdminAudit.count({ where: { action: 'LOGIN_FAILED' } }),
+    // Falhas de entrada, e não só do superadmin: quem está tentando arrombar a
+    // instalação também pode estar batendo na porta do dono.
+    prisma.auditLog.count({ where: { action: AuditAction.LOGIN_FAILED, outcome: 'FAILURE' } }),
   ]);
 
   /**
@@ -412,7 +475,12 @@ export async function createFirstOwner(
   });
 
   if (existente) {
-    await audit('CREATE_OWNER_DENIED', ctx, `conflito com ${existente.role} ${existente.name}`);
+    await audit(
+      AuditAction.OWNER_CREATION_DENIED,
+      `Criação recusada: já existe ${existente.role === 'OWNER' ? 'um dono' : 'um funcionário'} com este contato`,
+      ctx,
+      { actorLabel: email, outcome: 'FAILURE' }
+    );
     throw new AppError(
       'Já existe um usuário com este e-mail ou telefone.',
       409,
@@ -435,7 +503,7 @@ export async function createFirstOwner(
     select: { id: true, name: true, email: true, phone: true },
   });
 
-  await audit('CREATE_OWNER', ctx, `proprietário criado: ${owner.name} <${owner.email}>`);
+  void audit(AuditAction.OWNER_CREATED, `Proprietário criado: ${owner.name} <${owner.email}>`, ctx);
 
   // `email` é gravado a partir de uma string já validada, então nunca é null
   // aqui — o tipo do banco é opcional porque o funcionário pode não ter e-mail.

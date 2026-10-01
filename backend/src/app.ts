@@ -3,7 +3,6 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import path from 'node:path';
-import { UPLOAD_ROOT } from '@services/uploadService';
 import { env } from '@config/env';
 import { globalRateLimiter } from '@middlewares/rateLimiter';
 import { errorHandler, notFoundHandler } from '@middlewares/errorHandler';
@@ -13,7 +12,9 @@ import ownerRoutes from '@routes/ownerRoutes';
 import employeeRoutes from '@routes/employeeRoutes';
 import clientRoutes from '@routes/clientRoutes';
 import superadminRoutes from '@routes/superadminRoutes';
+import cronRoutes from '@routes/cronRoutes';
 import { startCronJobs } from '@services/cronService';
+import { usandoSupabase, UPLOAD_ROOT_DISCO } from '@services/imageStorage';
 
 const app = express();
 
@@ -33,15 +34,29 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Imagens enviadas (logo do salão, foto dos funcionários)
-app.use(
-  '/uploads',
-  express.static(UPLOAD_ROOT, {
-    maxAge: '7d',
-    // o nome do arquivo já é aleatório, mas o path resolve é defensivo
-    dotfiles: 'deny',
-  })
-);
+/*
+ * Imagens enviadas.
+ *
+ * Só existe quando as imagens vão para o disco local, ou seja, em
+ * desenvolvimento. Em produção com Supabase Storage, a URL da foto já é a
+ * URL pública do Supabase e este `static` não tem o que servir.
+ *
+ * O `if` não é otimização: montar o `static` resolveria o diretório e criaria
+ * a pasta `uploads/` num sistema de arquivos somente leitura, e o processo
+ * não subiria. A tela do dono mostra em qual dos dois as imagens estão, porque
+ * essa diferença explica a maior parte dos "a foto sumiu".
+ */
+if (!usandoSupabase()) {
+  app.use(
+    '/uploads',
+    express.static(path.resolve(UPLOAD_ROOT_DISCO), {
+      maxAge: '7d',
+      // o nome do arquivo já é aleatório, mas o path resolve é defensivo
+      dotfiles: 'deny',
+    })
+  );
+}
+
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(globalRateLimiter);
 
@@ -66,6 +81,7 @@ api.use('/owner', ownerRoutes);
 api.use('/employee', employeeRoutes);
 api.use('/client', clientRoutes);
 api.use('/superadmin', superadminRoutes);
+api.use('/cron', cronRoutes);
 
 app.use('/api', api);
 
@@ -77,6 +93,11 @@ app.use('/owner', ownerRoutes);
 app.use('/employee', employeeRoutes);
 app.use('/client', clientRoutes);
 app.use('/superadmin', superadminRoutes);
+// `/cron` NÃO é montado na raiz de propósito: é a única rota que muda dados
+// e não tem sessão. Publicada só sob `/api`, fica fora do alcance de um
+// `GET` disparado por link clicado, e o agendador sempre aponta para o
+// caminho completo.
+app.use('/api/cron', cronRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

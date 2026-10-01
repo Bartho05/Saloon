@@ -14,6 +14,8 @@ import {
 } from '@services/scheduleService';
 import { AppError } from '@middlewares/errorHandler';
 import { notifyOwnerNewBooking } from '@services/whatsappService';
+import * as audit from '@services/auditService';
+import { AuditAction } from '@services/auditService';
 
 /**
  * POST /booking/check-client
@@ -86,12 +88,65 @@ export async function getSlots(req: AuthRequest, res: Response): Promise<void> {
 export async function createBookingController(req: AuthRequest, res: Response): Promise<void> {
   const { serviceId, employeeId, startsAt, client } = req.body;
 
-  const result = await createBooking({
-    serviceId,
-    employeeId,
-    startsAt: new Date(startsAt),
-    client,
-  });
+  /**
+   * A tentativa recusada é registrada tanto quanto a aceita.
+   *
+   * Esta é a linha que mais importa no log inteiro: quando um cliente diz "aquele
+   * horário estava livre" e não estava, a única prova do que aconteceu está
+   * aqui — o horário pedido, o profissional escolhido e o motivo da recusa.
+   * Sem isso o log só contaria as aulas que deram certo, que é o que a agenda já
+   * mostra sozinha.
+   */
+  let result;
+  try {
+    result = await createBooking({
+      serviceId,
+      employeeId,
+      startsAt: new Date(startsAt),
+      client,
+    });
+  } catch (err) {
+    const appErr = err as AppError;
+    await audit.record(
+      {
+        action: AuditAction.APPOINTMENT_REJECTED,
+        summary: `Agendamento recusado: ${appErr.message || 'erro desconhecido'}`,
+        entity: 'appointment',
+        outcome: 'FAILURE',
+        actorKind: 'CLIENT',
+        actorLabel: client?.fullName?.trim() || client?.phone || null,
+        metadata: {
+          serviceId,
+          employeeId,
+          quando: startsAt,
+          telefone: client?.phone,
+          motivo: appErr.code,
+        },
+      },
+      audit.auditContextFrom(req)
+    );
+    throw err;
+  }
+
+  await audit.record(
+    {
+      action: AuditAction.APPOINTMENT_CREATED,
+      summary: `Agendou ${result.appointment.service.name} com ${result.appointment.employee.name}`,
+      entity: 'appointment',
+      entityId: result.appointment.id,
+      actorKind: 'CLIENT',
+      actorId: result.client.id,
+      actorLabel: result.client.fullName,
+      metadata: {
+        serviceId,
+        employeeId,
+        quando: result.appointment.startsAt.toISOString(),
+        telefone: result.client.phone,
+        clienteNovo: result.isNewClient,
+      },
+    },
+    audit.auditContextFrom(req)
+  );
 
   // Notifica dono sobre novo agendamento
   const settings = await prisma.salonSettings.findUnique({
@@ -183,6 +238,19 @@ export async function cancelClientAppointment(req: AuthRequest, res: Response): 
   const clientId = req.user!.clientId!;
 
   await cancelBooking(id, clientId, reason);
+
+  await audit.record(
+    {
+      action: AuditAction.APPOINTMENT_STATUS_CHANGED,
+      summary: 'Cliente cancelou o próprio agendamento',
+      entity: 'appointment',
+      entityId: id,
+      actorKind: 'CLIENT',
+      actorId: clientId,
+      metadata: { status: 'CANCELLED', motivo: reason ?? null },
+    },
+    audit.auditContextFrom(req)
+  );
 
   res.json({ message: 'Agendamento cancelado com sucesso' });
 }

@@ -2,12 +2,22 @@ import type { Response } from 'express';
 import { AppError } from '@middlewares/errorHandler';
 import { authMiddleware, generateTokens, type AuthRequest } from '@middlewares/auth';
 import * as superadmin from '@services/superadminService';
+import * as auditService from '@services/auditService';
 import { superadminSchema } from '@utils/validation';
 
-function contextOf(req: AuthRequest) {
+/**
+ * Contexto de auditoria da requisição.
+ *
+ * A identidade do autor vem do JWT, não de um parâmetro: assim a trilha não
+ * erra quem agiu por descuido, e nem um corpo de requisição forjado troca o
+ * autor do registro. Nas rotas públicas o token não existe e fica `null` — que
+ * é a informação correta: uma tentativa de login vem de alguém anônimo.
+ */
+function contextOf(req: AuthRequest): superadmin.AuditContext {
   return {
     ip: (req.ip || req.socket.remoteAddress || undefined)?.replace('::ffff:', ''),
     userAgent: req.get('user-agent') || undefined,
+    actorId: req.user?.superAdminId ?? null,
   };
 }
 
@@ -57,10 +67,37 @@ export async function listAccounts(req: AuthRequest, res: Response): Promise<voi
   res.json({ superAdmins: await superadmin.listSuperAdmins() });
 }
 
-/** GET /superadmin/audit */
+/**
+ * GET /superadmin/audit
+ *
+ * Trilha do sistema inteiro, com filtros. Sem filtro nenhum devolve tudo — que
+ * é a pergunta que se faz de um log ("o que aconteceu aqui?"), não "o que
+ * fizeram na minha conta".
+ *
+ * Os valores de `actorKind` e `entity` são validados contra a lista fechada em
+ * `auditService`: um filtro arbitrário viraria um ponto cego, e a pessoa
+ * buscaria por algo que nunca volta sem perceber.
+ */
 export async function listAuditLog(req: AuthRequest, res: Response): Promise<void> {
-  const limit = Number(req.query.limit) || 100;
-  res.json({ entries: await superadmin.listAudit(limit) });
+  const actorKind = req.query.actorKind
+    ? superadminSchema.actorKind.parse(req.query.actorKind)
+    : undefined;
+  const entity = req.query.entity
+    ? superadminSchema.auditEntity.parse(req.query.entity)
+    : undefined;
+
+  const trilha = await auditService.list({
+    limit: Number(req.query.limit) || 100,
+    offset: Number(req.query.offset) || 0,
+    action: req.query.action ? String(req.query.action) : undefined,
+    entity,
+    entityId: req.query.entityId ? String(req.query.entityId) : undefined,
+    actorKind,
+    outcome: req.query.outcome ? superadminSchema.outcome.parse(req.query.outcome) : undefined,
+    busca: req.query.busca ? String(req.query.busca) : undefined,
+  });
+
+  res.json({ ...trilha, porAcao: await auditService.summaryByAction() });
 }
 
 /** POST /superadmin/rotate-code */

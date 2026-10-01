@@ -6,6 +6,16 @@ export interface WhatsAppConfig {
   instanceId: string;
   token: string;
   apiUrl: string;
+  /**
+   * Token de segurança da conta Z-API (opcional).
+   *
+   * A Z-API tem duas credenciais: o token DA INSTÂNCIA, que vai no caminho da
+   * URL e é obrigatório, e o token DE SEGURANÇA DA CONTA, que vai no header
+   * `Client-Token`. O segundo, se configurado, faz a API recusar chamadas
+   * vindas de IP não cadastrado — é o que impede alguém que descubra a URL da
+   * instância de mandar mensagem em nome do salão.
+   */
+  clientToken?: string;
 }
 
 export interface SendMessageParams {
@@ -14,9 +24,22 @@ export interface SendMessageParams {
 }
 
 let cachedConfig: WhatsAppConfig | null = null;
+let cacheEm = 0;
+
+/**
+ * Validade do cache: 60 segundos.
+ *
+ * Em desenvolvimento, invalidar na hora resolvia. Em produção com mais de uma
+ * instância, não: a instância que atendeu a tela de configurações tem a
+ * configuração nova em memória, e as outras três continuam com a antiga — e a
+ * diferença só aparece como "às vezes o WhatsApp não manda".
+ *
+ * 60s é imperceptível para o dono earante que a troca propaga sozinha.
+ */
+const CACHE_MS = 60_000;
 
 export async function getWhatsAppConfig(): Promise<WhatsAppConfig | null> {
-  if (cachedConfig) return cachedConfig;
+  if (cachedConfig && Date.now() - cacheEm < CACHE_MS) return cachedConfig;
 
   // Primeiro tenta pegar do .env
   if (env.WHATSAPP_INSTANCE_ID && env.WHATSAPP_TOKEN) {
@@ -25,7 +48,9 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig | null> {
       instanceId: env.WHATSAPP_INSTANCE_ID,
       token: env.WHATSAPP_TOKEN,
       apiUrl: env.WHATSAPP_API_URL,
+      clientToken: env.WHATSAPP_CLIENT_TOKEN,
     };
+    cacheEm = Date.now();
     return cachedConfig;
   }
 
@@ -38,7 +63,15 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig | null> {
   if (settings?.whatsappApiConfig) {
     const config = settings.whatsappApiConfig as unknown as WhatsAppConfig;
     if (config.instanceId && config.token) {
-      cachedConfig = config;
+      cachedConfig = {
+        ...config,
+        // Preenche o que faltar: uma configuração salva antes de existir o
+        // campo `clientToken`, ou com a URL em branco, não pode fazer a
+        // integração parar de funcionar.
+        apiUrl: config.apiUrl || env.WHATSAPP_API_URL,
+        provider: config.provider || 'zapi',
+      };
+      cacheEm = Date.now();
       return cachedConfig;
     }
   }
@@ -48,16 +81,49 @@ export async function getWhatsAppConfig(): Promise<WhatsAppConfig | null> {
 
 export function clearWhatsAppCache(): void {
   cachedConfig = null;
+  cacheEm = 0;
 }
 
-export async function sendWhatsAppMessage(params: SendMessageParams): Promise<boolean> {
+/** Resultado do envio, com o motivo quando falha. */
+export interface SendResult {
+  ok: boolean;
+  /** Motivo legível da falha. Já é o que a Z-API respondeu, não um genérico. */
+  erro?: string;
+  /** Id da mensagem na Z-API, para amarrar o webhook de entrega posterior. */
+  messageId?: string | null;
+}
+
+/**
+ * Tempo limite de qualquer chamada ao provedor.
+ *
+ * Sem isto a requisição fica pendurada enquanto a API não responder, e o dono
+ * vê o botão girar até o proxy cortar a conexão do nada. Dez segundos dão
+ * tempo de sobra e produzem uma mensagem de erro utilizável.
+ */
+const TIMEOUT_MS = 10_000;
+
+/**
+ * Envia mensagem e devolve o motivo da falha.
+ *
+ * Antes isto devolvia só `true`/`false`. Com só isso, "WhatsApp não
+ * configurado", "token inválido" e "instância desconectada" viravam a mesma
+ * linha no log, e o dono ficava sem pista de onde olhar. A auditoria só é útil
+ * se o motivo vier junto.
+ */
+export async function sendWhatsAppMessageDetailed(
+  params: SendMessageParams
+): Promise<SendResult> {
   const config = await getWhatsAppConfig();
   if (!config) {
-    console.warn('⚠️ WhatsApp não configurado. Mensagem não enviada:', params.phone);
-    return false;
+    return {
+      ok: false,
+      erro: 'WhatsApp não configurado. Preencha instância e token nas configurações do salão.',
+    };
   }
 
   const formattedPhone = formatPhoneForWhatsApp(params.phone);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
   try {
     let response: Response;
@@ -65,10 +131,16 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
     switch (config.provider) {
       case 'zapi':
         response = await fetch(
-          `${config.apiUrl}/instances/${config.instanceId}/token/${config.token}/send-text`,
+          // Sem barra duplicada: o dono digita a URL e nem sempre sem barra no
+          // final, e "https://api.z-api.io//instances" volta 404 sem motivo.
+          `${config.apiUrl.replace(/\/+$/, '')}/instances/${config.instanceId}/token/${config.token}/send-text`,
           {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              ...(config.clientToken ? { 'Client-Token': config.clientToken } : {}),
+            },
             body: JSON.stringify({
               phone: formattedPhone,
               message: params.message,
@@ -79,9 +151,10 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
 
       case 'evolution':
         response = await fetch(
-          `${config.apiUrl}/message/sendText/${config.instanceId}`,
+          `${config.apiUrl.replace(/\/+$/, '')}/message/sendText/${config.instanceId}`,
           {
             method: 'POST',
+            signal: controller.signal,
             headers: {
               'Content-Type': 'application/json',
               apikey: config.token,
@@ -96,9 +169,10 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
 
       case 'meta':
         response = await fetch(
-          `${config.apiUrl}/${config.instanceId}/messages`,
+          `${config.apiUrl.replace(/\/+$/, '')}/${config.instanceId}/messages`,
           {
             method: 'POST',
+            signal: controller.signal,
             headers: {
               'Content-Type': 'application/json',
               Authorization: `Bearer ${config.token}`,
@@ -114,21 +188,90 @@ export async function sendWhatsAppMessage(params: SendMessageParams): Promise<bo
         break;
 
       default:
-        throw new Error(`Provedor WhatsApp não suportado: ${config.provider}`);
+        return { ok: false, erro: `Provedor WhatsApp não suportado: ${config.provider}` };
     }
+
+    const texto = await response.text();
 
     if (!response.ok) {
-      const error = await response.text();
-      console.error('❌ Erro ao enviar WhatsApp:', error);
-      return false;
+      return { ok: false, erro: extrairErroDaResposta(texto) ?? `O provedor respondeu ${response.status}` };
     }
 
-    console.log(`✅ WhatsApp enviado para ${formattedPhone}`);
-    return true;
+    let corpo: any = null;
+    try {
+      corpo = texto ? JSON.parse(texto) : null;
+    } catch {
+      corpo = null;
+    }
+
+    // A Z-API devolve 200 com `status: "ERROR"` em alguns casos de
+    // desconexão. Sem esta checagem, "desconectado" viraria "enviado".
+    if (corpo && (corpo.status === 'ERROR' || corpo.error)) {
+      return {
+        ok: false,
+        erro:
+          corpo.message ??
+          corpo.error?.message ??
+          (typeof corpo.error === 'string' ? corpo.error : 'A Z-API recusou o envio'),
+      };
+    }
+
+    return {
+      ok: true,
+      messageId: corpo?.messageId ?? corpo?.key?.id ?? null,
+    };
   } catch (error) {
-    console.error('❌ Erro ao enviar WhatsApp:', error);
-    return false;
+    const e = error as Error;
+    if (e.name === 'AbortError') {
+      return {
+        ok: false,
+        erro: `O provedor de WhatsApp não respondeu em ${TIMEOUT_MS / 1000} segundos.`,
+      };
+    }
+    return { ok: false, erro: `Falha de rede ao falar com o provedor: ${e.message}` };
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+/**
+ * O provedor pode responder 4xx/5xx com HTML de proxy, JSON, ou texto puro.
+ * Cada formato precisa virar a mesma coisa: uma frase que o dono consiga usar.
+ */
+function extrairErroDaResposta(texto: string): string | null {
+  if (!texto) return null;
+
+  let corpo: any;
+  try {
+    corpo = JSON.parse(texto);
+  } catch {
+    // HTML ou texto puro. Corta em 200 caracteres porque a tela mostra isso
+    // inteiro, e uma página de erro do proxy não cabe num cartão.
+    return texto.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200) || null;
+  }
+
+  for (const chave of ['message', 'error', 'status', 'detail']) {
+    const v = corpo?.[chave];
+    if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+
+  return null;
+}
+
+/**
+ * Envia mensagem.
+ *
+ * Mantém a assinatura booleana porque são doze chamadores esperando isso, e
+ * nenhum deles precisa do motivo. Quem precisa chama a versão detalhada.
+ */
+export async function sendWhatsAppMessage(params: SendMessageParams): Promise<boolean> {
+  const resultado = await sendWhatsAppMessageDetailed(params);
+
+  if (!resultado.ok) {
+    console.error('WhatsApp não enviado:', resultado.erro);
+  }
+
+  return resultado.ok;
 }
 
 function formatPhoneForWhatsApp(phone: string): string {

@@ -1,32 +1,26 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'crypto';
 import multer from 'multer';
 import { AppError } from '@middlewares/errorHandler';
+import { storage, type ImageKind } from '@services/imageStorage';
 
 /**
- * Upload de imagens para o disco local, servido por express.static.
+ * Recebimento de imagens.
  *
- * Por que disco e não base64 no banco: uma foto de rosto tem ~200KB e um
- * logo ~100KB. Guardar no Postgres enche a tabela sem necessidade e deixa
- * toda listagem de funcionário pesada. No disco, o arquivo vira uma URL.
+ * ── Por que memória, e não disco temporário ─────────────────────────────────
  *
- * Em produção com mais de uma instância, trocar por Supabase Storage ou
- * S3 mantendo a mesma interface (save → string URL).
+ * A primeira versão gravava num arquivo temporário e depois movia para o
+ * diretório final. Isso existia porque o destino era o disco, e mover arquivo é
+ * grátis no mesmo disco.
+ *
+ * Guardar em memória elimina o arquivo temporário inteiro: uma etapa a menos,
+ * uma classe de erro a menos (o `rename` falhando), e o mesmo caminho de código
+ * em desenvolvimento e em produção. O custo é 4MB na heap por upload, o que é
+ * irrelevante para um sistema que recebe uma foto de rosto por vez.
+ *
+ * O destino final não é mais uma decisão deste arquivo: quem sabe é
+ * `imageStorage`, que escolhe entre disco e Supabase conforme a configuração.
  */
 
-const UPLOAD_ROOT = path.resolve(process.cwd(), 'uploads');
-
-export const UPLOAD_DIRS = {
-  salon: path.join(UPLOAD_ROOT, 'salon'),
-  employees: path.join(UPLOAD_ROOT, 'employees'),
-} as const;
-
-for (const dir of Object.values(UPLOAD_DIRS)) {
-  fs.mkdirSync(dir, { recursive: true });
-}
-
-/** MIME permitidos + extensões correspondentes. */
+/** MIME permitidos. A lista fecha a porta antes de gastar banda e memória. */
 const ALLOWED: Record<string, string> = {
   'image/jpeg': '.jpg',
   'image/png': '.png',
@@ -35,20 +29,23 @@ const ALLOWED: Record<string, string> = {
 
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024; // 4MB
 
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => {
-    // o destino final depende da rota; cada rota cria seu próprio storage
-    cb(null, UPLOAD_ROOT);
-  },
-  filename: (_req, file, cb) => {
-    const ext = ALLOWED[file.mimetype] ?? path.extname(file.originalname).toLowerCase();
-    const unique = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}${ext}`;
-    cb(null, unique);
-  },
-});
+/**
+ * Arquivos aceitos, exposto para a validação do lado do servidor.
+ *
+ * O front e o back precisam concordar: um JPEG aceito no navegador e recusado
+ * pelo servidor vira "a foto não subiu" sem explicação.
+ */
+export const EXTENSAO_POR_MIME = ALLOWED;
 
+/**
+ * Multer em memória.
+ *
+ * `fileFilter` antes de `limits` de propósito: um arquivo de 50MB é barrado
+ * pelo MIME sem nunca ser lido. Ao contrário, sem o filtro, o limite de tamanho
+ * só age depois de o arquivo inteiro estar na memória.
+ */
 export const uploadImage = multer({
-  storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: MAX_UPLOAD_BYTES, files: 1 },
   fileFilter: (_req, file, cb) => {
     if (!ALLOWED[file.mimetype]) {
@@ -65,40 +62,31 @@ export const uploadImage = multer({
   },
 });
 
-/** Move o arquivo temporário para o diretório final e devolve a URL pública. */
-export function persistImage(
-  tmpPath: string,
-  kind: keyof typeof UPLOAD_DIRS,
-  prefix: string
-): string {
-  const dir = UPLOAD_DIRS[kind];
-  const ext = path.extname(tmpPath) || '.jpg';
-  const filename = `${prefix}-${crypto.randomBytes(8).toString('hex')}${ext}`;
-
-  fs.renameSync(tmpPath, path.join(dir, filename));
-
-  return `/uploads/${kind}/${filename}`;
+/**
+ * Guarda a imagem e devolve a URL pública.
+ *
+ * `Async` porque o destino pode ser a rede: no Supabase Storage, isto é uma
+ * requisição HTTP que pode demorar ou falhar. A interface já era assíncrona
+ * desde o começo, então a troca aconteceu sem propagar nada para os chamadores.
+ */
+export async function persistImage(
+  dados: Buffer,
+  kind: ImageKind,
+  prefix: string,
+  mimeType: string
+): Promise<string> {
+  return storage().salva(dados, kind, prefix, mimeType);
 }
 
 /**
  * Remove uma imagem anterior, se existir.
- * Só apaga arquivos dentro de uploads/ — protege contra path traversal caso
- * o banco seja adulterado.
+ *
+ * Silencioso por desenho: quando o dono troca a foto, apagar a antiga é
+ * limpeza, e falhar nisso não pode impedir o cadastro de funcionar. Sem
+ * tratamento, uma imagem já removida do Storage derrubaria a troca de foto.
  */
-export function removeImage(publicUrl: string | null | undefined): void {
-  if (!publicUrl || !publicUrl.startsWith('/uploads/')) return;
-
-  const relative = publicUrl.replace('/uploads/', '');
-  const target = path.resolve(UPLOAD_ROOT, relative);
-
-  // não deixa escapar de uploads/
-  if (!target.startsWith(UPLOAD_ROOT)) return;
-
-  try {
-    if (fs.existsSync(target)) fs.unlinkSync(target);
-  } catch (err) {
-    console.warn('Não foi possível remover imagem antiga:', err);
-  }
+export async function removeImage(publicUrl: string | null | undefined): Promise<void> {
+  await storage().remove(publicUrl);
 }
 
-export { UPLOAD_ROOT };
+export type { ImageKind };

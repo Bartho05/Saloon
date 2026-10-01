@@ -10,6 +10,8 @@ import { AppError } from '@middlewares/errorHandler';
 import { updateAppointmentStatus } from '@services/scheduleService';
 import { startOfSalonDay, startOfNextSalonDay } from '@utils/date';
 import { sendAppointmentCancellation, sendAppointmentConfirmation } from '@services/whatsappService';
+import * as audit from '@services/auditService';
+import { AuditAction } from '@services/auditService';
 
 /**
  * GET /owner/appointments
@@ -204,6 +206,45 @@ export async function updateAppointmentStatusController(req: AuthRequest, res: R
   }
 
   await updateAppointmentStatus(id, status, notes, userId);
+
+  /**
+   * Mudança de status é a ação que mais mexe no faturamento.
+   *
+   * "A receber" vira "recebido" exatamente aqui, e o financeiro do dia só fecha
+   * quando o atendimento é marcado como concluído. Registrar o antes e o depois
+   * é o que permite responder depois "quando esse serviço foi dado como pago,
+   * e por quem" — e nota simples esquecida é a origem mais comum de venda
+   * perdida sem ninguém perceber.
+   */
+  const STATUS_PT: Record<string, string> = {
+    SCHEDULED: 'agendado',
+    CONFIRMED: 'confirmado',
+    COMPLETED: 'concluído',
+    CANCELLED: 'cancelado',
+    NO_SHOW: 'não compareceu',
+  };
+
+  await audit.record(
+    {
+      // Cancelar é mudança de status, não remoção: o registro continua na agenda
+      // e no faturamento. Usar "deleted" aqui faria o log dizer que um
+      // agendamento sumiu, quando ele só mudou de estado.
+      action: AuditAction.APPOINTMENT_STATUS_CHANGED,
+      summary: `Marcou ${appointment.client.fullName || appointment.client.phone} como ${STATUS_PT[status] ?? status}`,
+      entity: 'appointment',
+      entityId: id,
+      actorKind: userRole === 'EMPLOYEE' ? 'EMPLOYEE' : 'OWNER',
+      actorId: userId,
+      metadata: {
+        de: appointment.status,
+        para: status,
+        servico: appointment.service.name,
+        profissional: appointment.employee.name,
+        observacoes: notes ?? null,
+      },
+    },
+    audit.auditContextFrom(req)
+  );
 
   // Envia notificação se cancelado pelo salão
   if (status === 'CANCELLED' && appointment.status !== 'CANCELLED') {

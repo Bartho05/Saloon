@@ -3,6 +3,7 @@ import { ownerApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { useSalon } from '@contexts/SalonContext';
 import { PhoneInput } from '@components/PhoneInput';
+import { EstadoWhatsApp, ParearCelular, Webhooks } from '@components/WhatsApp/WhatsAppSections';
 
 export function OwnerSettingsPage() {
   const { showToast } = useToast();
@@ -35,6 +36,7 @@ export function OwnerSettingsPage() {
     instanceId: string;
     token: string;
     apiUrl: string;
+    clientToken?: string;
   }>({
     provider: 'zapi',
     instanceId: '',
@@ -43,6 +45,34 @@ export function OwnerSettingsPage() {
   });
   const [testPhone, setTestPhone] = useState('');
   const [testingWhatsApp, setTestingWhatsApp] = useState(false);
+
+  /**
+   * Estado da instância.
+   *
+   * Três estados, e não dois, porque a diferença importa:
+   *
+   * - `null` ainda não consultado. Não se desenha nada: inventar um
+   *   "desconectado" aqui seria mentir na direção oposta.
+   * - com `erro` preenchido, a consulta falhou. Mostra-se o erro, porque é
+   *   ele que diz o conserto — "Instance not found" e "token inválido" são
+   *   problems diferentes, e esconder isso deixa o dono sem pista nenhuma.
+   * - preenchido sem erro, resposta normal.
+   */
+  const [estadoWhatsApp, setEstadoWhatsApp] = useState<{
+    configurado: boolean;
+    conectado: boolean;
+    numero: string | null;
+    pushName: string | null;
+    mensagem: string;
+  } | null>(null);
+  const [erroEstado, setErroEstado] = useState<string | null>(null);
+  const [carregandoEstado, setCarregandoEstado] = useState(false);
+
+  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [qrLink, setQrLink] = useState<string | null>(null);
+  const [carregandoQr, setCarregandoQr] = useState(false);
+  const [registrandoWebhooks, setRegistrandoWebhooks] = useState(false);
+  const [webhooksOk, setWebhooksOk] = useState<boolean | null>(null);
 
   const DAYS = [
     { key: 0, name: 'Domingo', short: 'Dom' },
@@ -57,6 +87,65 @@ export function OwnerSettingsPage() {
   useEffect(() => {
     loadSettings();
   }, []);
+
+  /**
+   * Consulta o estado assim que a tela abre.
+   *
+   * O motivo da falha é guardado e mostrado, não engolido. A Z-API tem várias
+   * formas de recusar (instância inexistente, token inválido, URL errada) e
+   * cada uma tem um conserto diferente — a mensagem que vem no corpo do erro
+   * é literalmente a instrução de como resolver.
+   */
+  useEffect(() => {
+    void consultarEstado();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const consultarEstado = async () => {
+    setCarregandoEstado(true);
+    try {
+      setEstadoWhatsApp(await ownerApi.getWhatsAppStatus());
+      setErroEstado(null);
+    } catch (err: any) {
+      setEstadoWhatsApp(null);
+      setErroEstado(err.message || 'Não foi possível consultar a Z-API');
+    } finally {
+      setCarregandoEstado(false);
+    }
+  };
+
+  const buscarQrCode = async () => {
+    setCarregandoQr(true);
+    try {
+      const qr = await ownerApi.getWhatsAppQrCode();
+      setQrCode(qr.base64);
+      setQrLink(qr.link);
+    } catch (err: any) {
+      setQrCode(null);
+      setQrLink(null);
+      showToast({ type: 'error', title: 'Não foi possível gerar o QR Code', message: err.message });
+    } finally {
+      setCarregandoQr(false);
+    }
+  };
+
+  const handleRegistrarWebhooks = async () => {
+    setRegistrandoWebhooks(true);
+    try {
+      const res = await ownerApi.registerWhatsAppWebhooks();
+      setWebhooksOk(true);
+      showToast({
+        type: 'success',
+        title: 'Avisos registrados',
+        message: res.detalhe,
+      });
+    } catch (err: any) {
+      setWebhooksOk(false);
+      showToast({ type: 'error', title: 'Não foi possível registrar', message: err.message });
+    } finally {
+      setRegistrandoWebhooks(false);
+    }
+  };
 
   const loadSettings = async () => {
     setLoading(true);
@@ -77,8 +166,27 @@ export function OwnerSettingsPage() {
       if (s.businessHours) {
         setBusinessHours(s.businessHours);
       }
-      if (s.whatsappApiConfig) {
-        setWhatsappConfig(s.whatsappApiConfig);
+
+      /**
+       * Só os campos que NÃO são segredo vêm do servidor.
+       *
+       * Os de credencial (token e token de segurança) ficam vazios de propósito:
+       * não há como mostrar um segredo preenchido. O backend trata o campo
+       * vazio como "mantenha o que já está", então salvar assim não apaga a
+       * configuração — que era o bug mais caro desta tela.
+       */
+      if (s.whatsapp) {
+        const config = s.whatsapp;
+        setWhatsappConfig(prev => ({
+          ...prev,
+          // O banco guarda texto livre; um valor desconhecido aqui viraria
+          // opção inválida no select. `zapi` é o padrão do sistema.
+          provider: (config.provider as typeof prev.provider) ?? 'zapi',
+          instanceId: config.instanceId ?? '',
+          apiUrl: config.apiUrl ?? 'https://api.z-api.io',
+          token: '',
+          clientToken: '',
+        }));
       }
     } catch (err: any) {
       showToast({ type: 'error', title: 'Erro', message: err.message });
@@ -112,8 +220,11 @@ export function OwnerSettingsPage() {
     setSaving(true);
     try {
       await ownerApi.updateSettings({ whatsappApiConfig: whatsappConfig });
-      showToast({ type: 'success', title: 'Configuração WhatsApp salva' });
-      loadSettings();
+      showToast({ type: 'success', title: 'Credenciais salvas' });
+      await loadSettings();
+      // O estado é reconsultado porque salvar credencial nova muda a resposta
+      // da Z-API — e o dono precisa ver na hora se passou a funcionar.
+      await consultarEstado();
     } catch (err: any) {
       showToast({ type: 'error', title: 'Erro', message: err.message });
     } finally {
@@ -348,80 +459,168 @@ export function OwnerSettingsPage() {
 
       {/* WhatsApp */}
       {activeTab === 'whatsapp' && (
-        <div className="bg-brand-white  border border-brand-gray p-6 space-y-6">
-          <h2 className="text-lg font-semibold text-brand-black">Configuração WhatsApp</h2>
-          <p className="text-brand-grayMid">
-            Configure a API do WhatsApp para envio automático de códigos, confirmações e lembretes.
-            Suportamos <strong>Z-API</strong>, <strong>Evolution API</strong> e <strong>Meta Cloud API</strong>.
-          </p>
+        <div className="space-y-6">
+          {/*
+            O estado vem ANTES dos campos, e não depois.
 
-          <div className="space-y-4">
+            A ordem importa: a primeira pergunta do dono é "está funcionando?",
+            e a resposta é sim/não com um motivo. Se a tela abrisse com quatro
+            campos de texto vazios, a primeira impressão seria "está quebrado"
+            mesmo com tudo funcionando — e foi exatamente isso que acontecia
+            antes: o token nunca voltava do servidor, então a tela mostrava
+            campos vazios sobre uma configuração que estava de pé.
+          */}
+          <EstadoWhatsApp
+            carregando={carregandoEstado}
+            estado={estadoWhatsApp}
+            erro={erroEstado}
+            onAtualizar={() => void consultarEstado()}
+          />
+
+          <div className="bg-brand-white border border-brand-gray p-6 space-y-6">
             <div>
-              <label className="field-label">Provedor</label>
-              <select
-                value={whatsappConfig.provider}
-                onChange={e => setWhatsappConfig(prev => ({ ...prev, provider: e.target.value as any }))}
-                className="field-input"
-              >
-                <option value="zapi">Z-API (Recomendado)</option>
-                <option value="evolution">Evolution API</option>
-                <option value="meta">Meta Cloud API</option>
-              </select>
+              <h2 className="text-lg font-semibold text-brand-black">Credenciais</h2>
+              <p className="text-brand-grayMid mt-1">
+                O sistema envia códigos de acesso, confirmações, lembretes e parabéns de
+                aniversário por este número. O <strong>Z-API</strong> é o mais simples de configurar
+                e o único que permite parear o celular e receber alertas de queda sem sair daqui.
+              </p>
             </div>
-            <div>
-              <label className="field-label">Instance ID</label>
-              <input
-                type="text"
-                value={whatsappConfig.instanceId}
-                onChange={e => setWhatsappConfig(prev => ({ ...prev, instanceId: e.target.value }))}
-                className="field-input"
-                placeholder="Sua Instance ID"
-              />
+
+            <div className="space-y-4">
+              <div>
+                <label className="field-label">Provedor</label>
+                <select
+                  value={whatsappConfig.provider}
+                  onChange={e => setWhatsappConfig(prev => ({ ...prev, provider: e.target.value as any }))}
+                  className="field-input"
+                >
+                  <option value="zapi">Z-API (Recomendado)</option>
+                  <option value="evolution">Evolution API</option>
+                  <option value="meta">Meta Cloud API</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="field-label">Instance ID</label>
+                <input
+                  type="text"
+                  value={whatsappConfig.instanceId}
+                  onChange={e => setWhatsappConfig(prev => ({ ...prev, instanceId: e.target.value }))}
+                  className="field-input"
+                  placeholder={settings?.whatsapp?.instanceId || 'Ex.: 1234ABCD-5678-EFGH'}
+                />
+                {/*
+                  Reconhece a instância já salva sem mostrar segredo nenhum: o
+                  ID aparece na URL da API e o dono precisa confirmar que é a
+                  mesma que ele criou.
+                */}
+                {settings?.whatsapp?.instanceId && whatsappConfig.instanceId === '' && (
+                  <p className="text-caption text-brand-grayMid mt-1">
+                    Já configurado: {settings.whatsapp.instanceId}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="field-label">Token da instância</label>
+                <input
+                  type="password"
+                  value={whatsappConfig.token}
+                  onChange={e => setWhatsappConfig(prev => ({ ...prev, token: e.target.value }))}
+                  className="field-input"
+                  placeholder={
+                    settings?.whatsapp?.temToken
+                      ? 'Já preenchido. Deixe em branco para manter.'
+                      : 'Em Z-API, em Instância > Tokens de segurança'
+                  }
+                />
+                {settings?.whatsapp?.temToken && whatsappConfig.token === '' && (
+                  <p className="text-caption text-brand-grayMid mt-1">
+                    Já há um token salvo. Deixe este campo em branco e ele será mantido.
+                  </p>
+                )}
+              </div>
+
+              {whatsappConfig.provider === 'zapi' && (
+                <div>
+                  <label className="field-label">Token de segurança da conta (opcional)</label>
+                  <input
+                    type="password"
+                    value={whatsappConfig.clientToken || ''}
+                    onChange={e => setWhatsappConfig(prev => ({ ...prev, clientToken: e.target.value }))}
+                    className="field-input"
+                    placeholder={settings?.whatsapp?.temTokenDeSeguranca ? 'Já preenchido' : 'Em Z-API, em Configurações > Segurança'}
+                  />
+                  <p className="text-caption text-brand-grayMid mt-1">
+                    Se você preencher, a Z-API só aceita chamadas vindas de um IP autorizado. É o
+                    que impede alguém que descubra o seu token de mandar mensagem em nome do salão.
+                  </p>
+                </div>
+              )}
+
+              <div>
+                <label className="field-label">URL da API</label>
+                <input
+                  type="url"
+                  value={whatsappConfig.apiUrl}
+                  onChange={e => setWhatsappConfig(prev => ({ ...prev, apiUrl: e.target.value }))}
+                  className="field-input"
+                  placeholder="https://api.z-api.io"
+                />
+              </div>
             </div>
-            <div>
-              <label className="field-label">Token / API Key</label>
-              <input
-                type="password"
-                value={whatsappConfig.token}
-                onChange={e => setWhatsappConfig(prev => ({ ...prev, token: e.target.value }))}
-                className="field-input"
-                placeholder="Seu token de acesso"
-              />
-            </div>
-            <div>
-              <label className="field-label">URL da API</label>
-              <input
-                type="url"
-                value={whatsappConfig.apiUrl}
-                onChange={e => setWhatsappConfig(prev => ({ ...prev, apiUrl: e.target.value }))}
-                className="field-input"
-                placeholder="https://api.z-api.io"
-              />
-            </div>
+
+            <button
+              onClick={handleWhatsAppSave}
+              disabled={saving}
+              className="w-full py-3 bg-brand-black text-white font-medium hover:bg-brand-grayDark disabled:opacity-50"
+            >
+              {saving ? 'Salvando...' : 'Salvar Credenciais'}
+            </button>
           </div>
 
-          <div className="border-t pt-6">
-            <h3 className="text-md font-medium text-brand-black mb-4">Testar Configuração</h3>
-            <div className="flex gap-4">
-              <PhoneInput
-                label="Telefone para teste"
-                value={testPhone}
-                onChange={setTestPhone}
-                required
-              />
+          {whatsappConfig.provider === 'zapi' && (
+            <ParearCelular
+              qr={qrCode}
+              carregando={carregandoQr}
+              onGerar={() => void buscarQrCode()}
+              onAbrirLink={qrLink}
+            />
+          )}
+
+          {whatsappConfig.provider === 'zapi' && (
+            <Webhooks
+              registrando={registrandoWebhooks}
+              registrado={webhooksOk}
+              onRegistrar={handleRegistrarWebhooks}
+            />
+          )}
+
+          <div className="bg-brand-white border border-brand-gray p-6">
+            <h3 className="text-md font-medium text-brand-black mb-1">Testar envio</h3>
+            <p className="text-body-sm text-brand-grayMid mb-4">
+              Envia uma mensagem real para o número que você indicar. Serve para confirmar que o
+              texto chega — não substitui o estado acima, que diz se o número está pareado.
+            </p>
+            <div className="flex gap-4 flex-wrap">
+              <div className="flex-1 min-w-[220px]">
+                <PhoneInput
+                  label="Telefone para teste"
+                  value={testPhone}
+                  onChange={setTestPhone}
+                  required
+                />
+              </div>
               <button
                 onClick={handleTestWhatsApp}
                 disabled={testingWhatsApp || !testPhone}
-                className="px-6 py-3 bg-brand-black text-white  font-medium hover:bg-brand-grayDark disabled:opacity-50 self-end"
+                className="px-6 py-3 bg-brand-black text-white font-medium hover:bg-brand-grayDark disabled:opacity-50 self-end"
               >
                 {testingWhatsApp ? 'Enviando...' : 'Enviar Teste'}
               </button>
             </div>
           </div>
-
-          <button onClick={handleWhatsAppSave} disabled={saving} className="w-full py-3 bg-brand-black text-white  font-medium hover:bg-brand-grayDark disabled:opacity-50">
-            {saving ? 'Salvando...' : 'Salvar Configuração WhatsApp'}
-          </button>
         </div>
       )}
 

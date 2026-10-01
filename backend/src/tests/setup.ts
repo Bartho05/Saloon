@@ -60,6 +60,13 @@ beforeAll(async () => {
   await prisma.client.deleteMany();
   await prisma.service.deleteMany();
   await prisma.user.deleteMany({ where: { role: 'EMPLOYEE' } });
+  // A trilha cresce a cada requisição auditada. Sem esta limpeza o arquivo de
+  // log do teste vira a única fonte de verdade sobre "o que aconteceu", e um
+  // teste que filtra por ação passa a depender do que rodou antes dele.
+  await prisma.auditLog.deleteMany();
+  // Códigos de verificação pendentes: uma suíte que pede código e não confirma
+  // deixaria o registro para a seguinte, que usa o mesmo telefone de teste.
+  await prisma.verificationCode.deleteMany();
   // Não apaga owner: o login de outras suítes depende dele
 });
 

@@ -192,6 +192,27 @@ export const superadminSchema = {
     phone: phoneSchema,
     password: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres'),
   }),
+
+  /**
+   * Filtros da trilha.
+   *
+   * Listas fechadas, e não `z.string()`: filtro que aceita qualquer valor
+   * devolve lista vazia sem erro, e quem busca por "login" e não acha conclui
+   * que o log está vazio — quando na verdade digitou errado.
+   */
+  actorKind: z.enum(['OWNER', 'EMPLOYEE', 'CLIENT', 'SUPERADMIN', 'SYSTEM', 'ANONYMOUS']),
+  auditEntity: z.enum([
+    'appointment',
+    'client',
+    'service',
+    'employee',
+    'settings',
+    'whatsapp',
+    'auth',
+    'superadmin',
+    'cron',
+  ]),
+  outcome: z.enum(['SUCCESS', 'FAILURE']),
 };
 
 // Financial schemas

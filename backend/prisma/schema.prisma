@@ -140,32 +140,97 @@ model SuperAdmin {
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
-  /// Toda entrada e saída fica registrada. Um acesso de nível máximo que
-  /// deixa rastro é o que torna a conta confiável.
-  audit         SuperAdminAudit[]
 
   @@map("super_admins")
 }
 
 /// Trilha de auditoria do superadmin.
-model SuperAdminAudit {
-  id          Int      @id @default(autoincrement())
-  superAdminId Int?
-  /// LOGIN_SUCCESS | LOGIN_FAILED | LOCKED | UNLOCKED | CREATE_OWNER
-  /// | ROTATE_CODE | DEACTIVATE
-  action      String
-  /// Endereço de quem tentou. Guardado para investigating origem.
-  ip          String?
-  userAgent   String?
-  /// Contexto legível: qual e-mail, qual salonId, etc. Sem segredo.
-  detail      String?
-  createdAt   DateTime @default(now())
+/// Trilha de auditoria de TUDO que acontece no sistema.
+///
+/// Uma tabela so, e nao uma por area. Duas tabelas de log soam corretas, mas na
+/// pratica criam a pergunta "qual dos dois eu olho?" — e a resposta honesta
+/// seria "os dois, e junte as partes". O superadmin tambem entra aqui: o que
+/// diferencia um acesso maximo nao e a tabela onde ele e gravado, e o campo
+/// `actorKind`.
+///
+/// Sem chave estrangeira para o autor, de proposito: o log precisa sobreviver
+/// a conta. Se alguem apaga o proprio acesso e sai, o rastro e justamente o
+/// que sobra.
+model AuditLog {
+  id      Int    @id @default(autoincrement())
+  /// Codigo da acao. A lista fechada vive em `auditService.ts`; texto livre
+  /// aqui vira bagunca depois de um mes de uso.
+  action  String
 
-  superAdmin  SuperAdmin? @relation(fields: [superAdminId], references: [id], onDelete: SetNull)
+  /// O que foi tocado: "appointment", "client", "service", "employee",
+  /// "settings", "whatsapp", "auth", "superadmin", "cron".
+  entity   String?
+  entityId String?
 
+  /// SUCCESS ou FAILURE. Sem isso, "login" e "tentativa de login" ficam
+  /// indistinguiveis numa busca por `action`.
+  outcome String @default("SUCCESS")
+
+  /// Quem agiu: OWNER | EMPLOYEE | CLIENT | SUPERADMIN | SYSTEM | ANONYMOUS
+  actorKind  String
+  actorId    String?
+  /// Nome/e-mail no momento da acao, em texto. A pessoa pode ser renomeada
+  /// depois, e o log precisa continuar legivel como era na hora.
+  actorLabel String?
+
+  /// Frase curta em portugues, ja pronta para a tela. Ler um log nao pode
+  /// exigir abrir a tabela e traduzir um codigo.
+  summary String
+
+  /// Contexto extra (de/para, telefone, motivo). NUNCA guarda segredo: sem
+  /// senha, sem token, sem hash.
+  metadata Json?
+
+  /// Origem da acao, para responder "de onde veio isso?".
+  ip        String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
   @@index([action, createdAt])
-  @@index([superAdminId, createdAt])
-  @@map("super_admin_audit")
+  @@index([entity, entityId])
+  @@index([actorKind, actorId])
+  @@index([outcome, createdAt])
+  @@map("audit_logs")
+}
+
+/// Código de verificação enviado ao cliente por WhatsApp.
+///
+/// Antes isto vivia num `Map` na memória do processo. Funcionava em
+/// desenvolvimento e quebraria em produção serverless: cada instância tem a
+/// sua própria memória, então o `POST /request-code` podia cair na instância A
+/// e o `POST /verify-code` na B — e o cliente recebia um código que o sistema
+/// "não conhecia". É o tipo de falha que só aparece depois do deploy.
+///
+/// A tabela também resolve a limpeza: o `Map` só perdia os códigos quando o
+/// processo reiniciava, então códigos expirados ficavam lá até alguém pedir
+/// outro para o mesmo telefone.
+model VerificationCode {
+  id        String   @id @default(cuid())
+  /// Telefone só com dígitos, já normalizado (o mesmo formato gravado no
+  /// cliente). Índice porque toda verificação busca por ele.
+  phone     String
+  /// SHA-256 do código, não o código.
+  ///
+  /// Vale ser honesto sobre o que isto protege: um hash de 6 dígitos com o
+  /// telefone do lado não resiste a quem já leu a tabela — um milhão de SHA-256
+  /// é instantâneo. A proteção de verdade é a expiração de 10 minutos, o uso
+  /// único e o limite de tentativas. O hash serve para o código não estar em
+  /// texto numa tabela que muito mais gente lê do que deveria.
+  codeHash  String
+  /// Tentativas erradas já feitas neste código. Zera no acerto.
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone, expiresAt])
+  @@map("verification_codes")
 }
 
 model SalonSettings {

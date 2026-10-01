@@ -25,7 +25,7 @@ async function main() {
     return;
   }
 
-  await prisma.superAdminAudit.deleteMany({});
+  await prisma.auditLog.deleteMany({});
   await prisma.$disconnect();
 
   const seed = process.env.SUPERADMIN_BOOTSTRAP_SEED;

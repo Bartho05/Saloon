@@ -16,6 +16,7 @@ import {
 } from '@utils/validation';
 import { validateBody, validateParams, validateQuery } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
+import * as whatsappController from '@controllers/whatsappController';
 
 const router = Router();
 
@@ -48,6 +49,19 @@ router.patch('/settings', validateBody(updateSettingsSchema), asyncHandler(setti
 router.post('/settings/test-whatsapp', asyncHandler(settingsController.testWhatsApp));
 router.post('/settings/run-birthday-job', asyncHandler(settingsController.runBirthdayJob));
 router.post('/settings/run-reminder-job', asyncHandler(settingsController.runReminderJob));
+
+/**
+ * Operação do WhatsApp, separada do "testar".
+ *
+ * "Testar" responde se uma mensagem sai. Estas três respondem se o WhatsApp
+ * está realmente de pé, e isso é outra pergunta: um número desconectado passa
+ * pelo teste com a mensagem bonitinha e o cliente não recebe nada. São os
+ * problemas que precisam de consertos diferentes, então precisam de telas
+ * diferentes.
+ */
+router.get('/whatsapp/status', asyncHandler(whatsappController.status));
+router.get('/whatsapp/qrcode', asyncHandler(whatsappController.qrcode));
+router.post('/whatsapp/webhooks/register', asyncHandler(whatsappController.registerWebhooks));
 
 // Financeiro
 router.get('/financial', validateQuery(financialQuerySchema), asyncHandler(settingsController.getFinancialOverview));

@@ -4,6 +4,22 @@ const envSchema = z.object({
   // Database
   DATABASE_URL: z.string().url(),
 
+  /**
+   * Supabase Storage para as imagens.
+   *
+   * As três juntas ligam o armazenamento de imagens. Sem elas, o sistema grava
+   * no disco — o que funciona em desenvolvimento e NÃO funciona no Vercel,
+   * porque função serverless não tem disco. A foto seria "enviada com sucesso"
+   * e apareceria quebrada para todo mundo.
+   *
+   * `SUPABASE_SERVICE_ROLE_KEY` é a chave que burla as políticas de acesso do
+   * bucket. Ela é o equivalente a senha de administrador do banco: nunca no
+   * frontend, nunca no repositório, nunca em print.
+   */
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+  SUPABASE_STORAGE_BUCKET: z.string().optional(),
+
   // JWT
   JWT_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
@@ -20,6 +36,25 @@ const envSchema = z.object({
   WHATSAPP_INSTANCE_ID: z.string().optional(),
   WHATSAPP_TOKEN: z.string().optional(),
   WHATSAPP_API_URL: z.string().url().default('https://api.z-api.io'),
+  /**
+   * Token de segurança da conta Z-API (opcional, mas recomendado).
+   *
+   * Varia do token da instância: este é o header `Client-Token`, e sua função é
+   * fazer a Z-API recusar chamadas de IP não autorizado. Sem ele, a URL da
+   * instância basta para alguém mandar mensagem em nome do salão.
+   */
+  WHATSAPP_CLIENT_TOKEN: z.string().optional(),
+  /**
+   * URL pública do backend, para cadastrar o webhook da Z-API sozinha.
+   *
+   * A Z-API é quem avisa o sistema quando o WhatsApp cai — o sistema não
+   * consulta. Sem esta URL o dono descobriria a queda por um cliente
+   * reclamando, que é a forma mais cara de descobrir.
+   *
+   * Em produção no Vercel, é o domínio do backend, não o do frontend: o
+   * webhook aponta para a API.
+   */
+  BACKEND_URL: z.string().url().optional(),
 
   // Email (optional)
   SMTP_HOST: z.string().optional(),
@@ -27,6 +62,19 @@ const envSchema = z.object({
   SMTP_USER: z.string().optional(),
   SMTP_PASS: z.string().optional(),
   EMAIL_FROM: z.string().email().optional(),
+
+  /**
+   * Chave das rotinas disparadas de fora (Vercel Cron ou agendador externo).
+   *
+   * Em produção é OBRIGATÓRIA de verdade: sem ela, `/api/cron/*` responde 503
+   * e os lembretes de WhatsApp nunca saem. O sistema continua funcionando,
+   * o que torna a falha silenciosa — ninguém percebe até um cliente reclamar
+   * que não recebeu o lembrete.
+   *
+   * O Vercel injeta `CRON_SECRET` sozinho nas requisições de Cron, se você
+   * criar uma variável de ambiente com esse nome exato no projeto.
+   */
+  CRON_SECRET: z.string().min(16).optional(),
 
   // Rate Limiting
   //

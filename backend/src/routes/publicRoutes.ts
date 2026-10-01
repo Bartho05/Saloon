@@ -11,6 +11,7 @@ import {
 } from '@utils/validation';
 import { validateQuery, validateBody, validateParams } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
+import { webhooks as whatsappWebhooks } from '@controllers/whatsappController';
 
 const router = Router();
 
@@ -50,5 +51,19 @@ router.post(
 // Rotas para página pública de agendamento
 router.get('/booking/public-services', asyncHandler(bookingController.getPublicServices));
 router.get('/booking/public-employees', asyncHandler(bookingController.getPublicEmployees));
+
+/**
+ * Webhook da Z-API.
+ *
+ * Pública de propósito: quem chama é a Z-API, que não tem sessão nem token
+ * nosso. A proteção está em não haver o que proteger — a rota só grava no log
+ * de auditoria e devolve `ok`. Ela responde 200 sempre, porque a Z-API reenvia
+ * em caso de erro e um 500 aqui viraria loop de requisições.
+ *
+ * Não entra no rate limiter de propósito: a Z-API dispara vários eventos em
+ * sequência quando o celular reconecta, e uma delas ser barrada seria perder
+ * justamente o alerta de reconexão.
+ */
+router.post('/whatsapp/webhook', whatsappWebhooks);
 
 export default router;

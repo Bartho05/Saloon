@@ -3,11 +3,45 @@ import type { Service, Employee, Client, Appointment, TimeSlot, SalonSettings, S
 /**
  * Prefixo da API.
  *
- * Precisa ser /api (e não '') porque a SPA também tem rotas /owner/*,
- * /funcionario/*, /agendar. Sem o prefixo, o proxy do Vite não consegue
- * separar "página" de "API" e um F5 quebra o app.
+ * Em desenvolvimento, `/api` relativo: o proxy do Vite (ver `vite.config.ts`)
+ * encaminha para o backend em `localhost:3000`. O prefixo é obrigatório, e
+ * não pode ser a string vazia, porque a SPA também tem rotas `/owner/*`,
+ * `/funcionario/*` e `/agendar` — sem o prefixo, o proxy não consegue separar
+ * "página" de "API" e um F5 em `/owner/funcionarios` mostraria JSON.
+ *
+ * ── Em produção, `VITE_API_URL` é obrigatória ─────────────────────────────────
+ *
+ * Sem ela, a SPA chama `/api/...` no próprio domínio, o Vercel não tem função
+ * nenhuma nesse prefixo, e devolve o `index.html` da SPA. O `fetch` receberia
+ * HTML onde esperava JSON, e o erro seria "Unexpected token '<'" — que não
+ * diz nada sobre a causa.
+ *
+ * Por isso a checagem abaixo existe: ela transforma um erro de parse em uma
+ * frase que diz o que fazer.
  */
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
+
+/**
+ * Falha de configuração de deploy, dita uma vez e na primeira vez.
+ *
+ * Uma vez só porque o modo de erro repetido em toda tela vira ruído, e ruído é
+ * o oposto de diagnóstico. Quem vê esta mensagem já sabe o que fazer.
+ */
+let avisouApiNaoConfigurada = false;
+
+function erroDeConfiguracao(): Error {
+  if (!avisouApiNaoConfigurada) {
+    avisouApiNaoConfigurada = true;
+    console.error(
+      '[api] O servidor devolveu HTML onde a API devia responder.\n' +
+        '      almost sempre significa que VITE_API_URL não está configurada no Vercel.\n' +
+        '      Configure com a URL do backend, ex.: https://api.seudominio.com.br'
+    );
+  }
+  return new Error(
+    'Não consegui falar com o servidor. A configuração de deploy está incompleta.'
+  );
+}
 
 /** Promise de refresh em andamento, para deduplicar chamadas concorrentes. */
 let refreshInFlight: Promise<boolean> | null = null;
@@ -137,6 +171,19 @@ async function request<T>(
   }
 
   if (response.status === 204) return undefined as T;
+
+  /**
+   * A API responde JSON. A SPA responde HTML.
+   *
+   * Checar o `Content-Type` antes do `parse` transforma "Unexpected token '<'"
+   * — que não diz nada — na frase que diz o que fazer. É a diferença entre um
+   * bug de deploy que se resolve em dois minutos e um que vira caixa-mística.
+   */
+  const tipo = response.headers.get('content-type') ?? '';
+  if (!tipo.includes('application/json')) {
+    throw erroDeConfiguracao();
+  }
+
   return response.json();
 }
 
@@ -213,14 +260,44 @@ export interface SuperAdminOverview {
   ready: boolean;
 }
 
+export type ActorKind = 'OWNER' | 'EMPLOYEE' | 'CLIENT' | 'SUPERADMIN' | 'SYSTEM' | 'ANONYMOUS';
+
+export type AuditEntity =
+  | 'appointment'
+  | 'client'
+  | 'service'
+  | 'employee'
+  | 'settings'
+  | 'whatsapp'
+  | 'auth'
+  | 'superadmin'
+  | 'cron';
+
 export interface AuditEntry {
   id: number;
   action: string;
+  entity: string | null;
+  entityId: string | null;
+  outcome: 'SUCCESS' | 'FAILURE';
+  actorKind: string;
+  actorId: string | null;
+  actorLabel: string | null;
+  /** Frase em português, já pronta para a tela. */
+  summary: string;
+  metadata: Record<string, unknown> | null;
   ip: string | null;
   userAgent: string | null;
-  detail: string | null;
   createdAt: string;
-  superAdmin: { name: string; email: string } | null;
+}
+
+export interface AuditQuery {
+  limit?: number;
+  offset?: number;
+  action?: string;
+  entity?: AuditEntity;
+  actorKind?: ActorKind;
+  outcome?: 'SUCCESS' | 'FAILURE';
+  busca?: string;
 }
 
 export const superadminApi = {
@@ -248,7 +325,29 @@ export const superadminApi = {
 
   getAccounts: () => request<{ superAdmins: SuperAdmin[] }>('/superadmin/accounts'),
 
-  getAudit: (limit = 100) => request<{ entries: AuditEntry[] }>(`/superadmin/audit?limit=${limit}`),
+  /**
+   * Trilha de auditoria de todo o sistema, com filtros.
+   *
+   * Sem filtro nenhum devolve tudo, que é a pergunta que se faz de um log.
+   */
+  getAudit: (q: AuditQuery = {}) => {
+    const params = new URLSearchParams();
+    if (q.limit) params.set('limit', String(q.limit));
+    if (q.offset) params.set('offset', String(q.offset));
+    if (q.entity) params.set('entity', q.entity);
+    if (q.actorKind) params.set('actorKind', q.actorKind);
+    if (q.outcome) params.set('outcome', q.outcome);
+    if (q.busca) params.set('busca', q.busca);
+
+    const query = params.toString();
+    return request<{
+      entries: AuditEntry[];
+      total: number;
+      limit: number;
+      offset: number;
+      porAcao: Array<{ action: string; count: number }>;
+    }>(`/superadmin/audit${query ? `?${query}` : ''}`);
+  },
 
   getOwners: () =>
     request<{
@@ -355,6 +454,34 @@ export const clientApi = {
 // Owner
 export const ownerApi = {
   getDashboard: () => request<any>('/owner/appointments/today'),
+
+  /**
+   * Estado real da instância do WhatsApp.
+   *
+   * Separado de "testar envio" porque são perguntas diferentes: o teste diz se
+   * uma mensagem saiu agora, o estado diz se o número está pareado. Um número
+   * desconectado passa pelo teste e o cliente não recebe nada — e a diferença
+   * entre "a API está errada" e "o celular desconectou" muda o conserto inteiro.
+   */
+  getWhatsAppStatus: () =>
+    request<{
+      configurado: boolean;
+      conectado: boolean;
+      numero: string | null;
+      pushName: string | null;
+      mensagem: string;
+    }>('/owner/whatsapp/status'),
+
+  /** QR Code para parear o celular, sem precisar abrir o painel da Z-API. */
+  getWhatsAppQrCode: () =>
+    request<{ base64: string; link: string | null }>('/owner/whatsapp/qrcode'),
+
+  /** Cadastra os webhooks de entrega e desconexão. */
+  registerWhatsAppWebhooks: () =>
+    request<{ ok: boolean; detalhe: string }>('/owner/whatsapp/webhooks/register', {
+      method: 'POST',
+    }),
+
   getAppointments: (params?: { status?: string; startDate?: string; endDate?: string; employeeId?: string; limit?: number }) => {
     const query = new URLSearchParams();
     if (params?.status) query.set('status', params.status);

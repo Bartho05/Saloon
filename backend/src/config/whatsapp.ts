@@ -110,6 +110,47 @@ const TIMEOUT_MS = 10_000;
  * linha no log, e o dono ficava sem pista de onde olhar. A auditoria só é útil
  * se o motivo vier junto.
  */
+/**
+ * Desmonta a URL da Z-API em base, instância e token.
+ *
+ * A tela da Z-API mostra a URL inteira, já com instância e token dentro:
+ *
+ *   https://api.z-api.io/instances/{ID}/token/{TOKEN}/send-text
+ *
+ * É isso que a pessoa copia. Se o código montar a chamada por cima disso, a
+ * URL final fica com o caminho repetido, a API devolve 404, e a tela acusa
+ * "instância não encontrada" — mensagem verdadeira que aponta para a causa
+ * errada.
+ *
+ * Por isso as duas formas são aceitas: a curta (a que a documentação
+ * descreve) e a colada do painel. Exigir que a pessoa decifre a URL antes de
+ * preencher não é validação, é trabalho inútil.
+ */
+function resolveZapiEndpoint(config: WhatsAppConfig): {
+  base: string;
+  instanceId: string;
+  token: string;
+} {
+  const bruta = (config.apiUrl || '').trim().replace(/\/+$/, '');
+  const embutido = bruta.match(/^(.*?)\/instances\/([^/]+)\/token\/([^/]+)/);
+
+  if (embutido) {
+    return {
+      base: embutido[1] || 'https://api.z-api.io',
+      // O que veio na URL tem prioridade: se a pessoa colou o endpoint da tela,
+      // é aquele que está certo.
+      instanceId: embutido[2],
+      token: embutido[3],
+    };
+  }
+
+  return {
+    base: bruta || 'https://api.z-api.io',
+    instanceId: config.instanceId,
+    token: config.token,
+  };
+}
+
 export async function sendWhatsAppMessageDetailed(
   params: SendMessageParams
 ): Promise<SendResult> {
@@ -129,25 +170,22 @@ export async function sendWhatsAppMessageDetailed(
     let response: Response;
 
     switch (config.provider) {
-      case 'zapi':
-        response = await fetch(
-          // Sem barra duplicada: o dono digita a URL e nem sempre sem barra no
-          // final, e "https://api.z-api.io//instances" volta 404 sem motivo.
-          `${config.apiUrl.replace(/\/+$/, '')}/instances/${config.instanceId}/token/${config.token}/send-text`,
-          {
-            method: 'POST',
-            signal: controller.signal,
-            headers: {
-              'Content-Type': 'application/json',
-              ...(config.clientToken ? { 'Client-Token': config.clientToken } : {}),
-            },
-            body: JSON.stringify({
-              phone: formattedPhone,
-              message: params.message,
-            }),
-          }
-        );
+      case 'zapi': {
+        const { base, instanceId, token } = resolveZapiEndpoint(config);
+        response = await fetch(`${base}/instances/${instanceId}/token/${token}/send-text`, {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(config.clientToken ? { 'Client-Token': config.clientToken } : {}),
+          },
+          body: JSON.stringify({
+            phone: formattedPhone,
+            message: params.message,
+          }),
+        });
         break;
+      }
 
       case 'evolution':
         response = await fetch(
@@ -194,7 +232,8 @@ export async function sendWhatsAppMessageDetailed(
     const texto = await response.text();
 
     if (!response.ok) {
-      return { ok: false, erro: extrairErroDaResposta(texto) ?? `O provedor respondeu ${response.status}` };
+      const bruto = extrairErroDaResposta(texto) ?? `O provedor respondeu ${response.status}`;
+      return { ok: false, erro: traduzErroZapi(bruto) ?? bruto };
     }
 
     let corpo: any = null;
@@ -207,13 +246,11 @@ export async function sendWhatsAppMessageDetailed(
     // A Z-API devolve 200 com `status: "ERROR"` em alguns casos de
     // desconexão. Sem esta checagem, "desconectado" viraria "enviado".
     if (corpo && (corpo.status === 'ERROR' || corpo.error)) {
-      return {
-        ok: false,
-        erro:
-          corpo.message ??
-          corpo.error?.message ??
-          (typeof corpo.error === 'string' ? corpo.error : 'A Z-API recusou o envio'),
-      };
+      const bruto =
+        corpo.message ??
+        corpo.error?.message ??
+        (typeof corpo.error === 'string' ? corpo.error : 'A Z-API recusou o envio');
+      return { ok: false, erro: traduzErroZapi(bruto) ?? bruto };
     }
 
     return {
@@ -253,6 +290,64 @@ function extrairErroDaResposta(texto: string): string | null {
   for (const chave of ['message', 'error', 'status', 'detail']) {
     const v = corpo?.[chave];
     if (typeof v === 'string' && v.trim()) return v.trim();
+  }
+
+  return null;
+}
+
+/**
+ * Traduz os erros de credencial da Z-API em instrução.
+ *
+ * ── Por que isto não é vaidade ──────────────────────────────────────────────
+ *
+ * A Z-API responde "your client-token is not configured" a qualquer requisição
+ * sem o Token de Segurança da Conta. A mensagem é verdadeira e não diz nada do
+ * que fazer: não é problema de instância, não é token errado, não é celular
+ * desconectado. Quem lê isso no painel do dono procura três coisas e não acha
+ * nenhuma.
+ *
+ * O caso é comum: qualquer conta Z-API com o recurso de segurança habilitado —
+ * que é o padrão do painel — cai nele. Foi o que aconteceu na primeira
+ * configuração real deste sistema, e o diagnóstico só foi rápido porque a
+ * mensagem foi lida com calma. Traduzir é a diferença entre um minuto de
+ * trabalho e um mistério.
+ *
+ * Fica aqui, e não no `zapi.ts`, porque o envio de mensagem também precisa
+ * traduzir, e o `zapi.ts` importa este arquivo — importar de volta criaria
+ * ciclo.
+ */
+export function traduzErroZapi(mensagem: string): string | null {
+  const t = mensagem.toLowerCase();
+
+  if (t.includes('client-token') || t.includes('client token')) {
+    return (
+      'A Z-API exige o Token de Segurança da Conta e ele não está informado. ' +
+      'No painel da Z-API, abra Segurança → Token de Segurança da Conta, e cole o token ' +
+      'no campo "Token de segurança da conta" em Configurações → WhatsApp. ' +
+      `Resposta da Z-API: ${mensagem}`
+    );
+  }
+
+  if (t.includes('instance not found') || t.includes('instancia nao encontrada')) {
+    return (
+      'A Z-API não encontrou essa instância. Confira se o Instance ID é o da instância que ' +
+      'você criou — ele muda se a instância for recriada. ' +
+      `Resposta da Z-API: ${mensagem}`
+    );
+  }
+
+  if (t.includes('invalid token') || t.includes('token inválido') || t.includes('token invalido')) {
+    return (
+      'O token da instância não foi aceito. Confira o valor em Instância → Tokens de segurança ' +
+      `na Z-API. Resposta da Z-API: ${mensagem}`
+    );
+  }
+
+  if (t.includes('not connected') || t.includes('desconectad')) {
+    return (
+      'O número está desconectado do servidor da Z-API. Abra Configurações → WhatsApp, gere o ' +
+      `QR Code e escaneie com o celular. Resposta da Z-API: ${mensagem}`
+    );
   }
 
   return null;

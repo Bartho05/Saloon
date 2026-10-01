@@ -501,6 +501,17 @@ export function OwnerSettingsPage() {
                 </select>
               </div>
 
+              {/*
+                Campos que a Z-API não exige, mas que o painel entrega prontos.
+
+                A tela de integração da Z-API mostra a URL inteira, com
+                instância e token já dentro. É o que a pessoa copia, e é a
+                primeira tentativa de todo mundo. O backend aceita os dois
+                formatos (ver `resolveZapiEndpoint` em `whatsapp.ts`), então
+                colar a URL completa aqui funciona — desde que os campos
+                Instance ID e Token também estejam preenchidos, porque a URL
+                sozinha não substitui o que é salvo.
+              */}
               <div>
                 <label className="field-label">Instance ID</label>
                 <input
@@ -508,18 +519,16 @@ export function OwnerSettingsPage() {
                   value={whatsappConfig.instanceId}
                   onChange={e => setWhatsappConfig(prev => ({ ...prev, instanceId: e.target.value }))}
                   className="field-input"
-                  placeholder={settings?.whatsapp?.instanceId || 'Ex.: 1234ABCD-5678-EFGH'}
+                  placeholder={settings?.whatsapp?.instanceId || 'Ex.: 3F9FFA3A072B01BA57C3F291022C939C'}
                 />
-                {/*
-                  Reconhece a instância já salva sem mostrar segredo nenhum: o
-                  ID aparece na URL da API e o dono precisa confirmar que é a
-                  mesma que ele criou.
-                */}
                 {settings?.whatsapp?.instanceId && whatsappConfig.instanceId === '' && (
                   <p className="text-caption text-brand-grayMid mt-1">
                     Já configurado: {settings.whatsapp.instanceId}
                   </p>
                 )}
+                <p className="text-caption text-brand-grayMid mt-1">
+                  No painel da Z-API, clique em editar na sua instância.
+                </p>
               </div>
 
               <div>
@@ -532,7 +541,7 @@ export function OwnerSettingsPage() {
                   placeholder={
                     settings?.whatsapp?.temToken
                       ? 'Já preenchido. Deixe em branco para manter.'
-                      : 'Em Z-API, em Instância > Tokens de segurança'
+                      : 'Ex.: 60C60AD07EF2F45C1E56F91E'
                   }
                 />
                 {settings?.whatsapp?.temToken && whatsappConfig.token === '' && (
@@ -542,19 +551,40 @@ export function OwnerSettingsPage() {
                 )}
               </div>
 
+              {/*
+                O Token de Segurança da Conta NÃO é opcional na prática.
+
+                A documentação da Z-API trata como opcional porque o recurso
+                começa desativado: enquanto ninguém clica em "Ativar Token", a
+                API aceita chamada sem ele. Mas assim que alguém ativa — ou
+                em contas onde já vem ativo — TODA requisição sem o header
+                `Client-Token` é recusada com "your client-token is not
+                configured", inclusive o QR Code e a consulta de status.
+
+                Ele estava marcado como "opcional" aqui e gerou exatamente o
+                problema que se viu: tela configurada, nada funcionando, e
+                nenhuma pista do motivo. A dica agora aparece sempre, porque
+                descobrir isso no meio do caminho custa mais que preencher um
+                campo a mais.
+              */}
               {whatsappConfig.provider === 'zapi' && (
-                <div>
-                  <label className="field-label">Token de segurança da conta (opcional)</label>
+                <div className="border-l-2 border-brand-black pl-4">
+                  <label className="field-label">Token de segurança da conta</label>
                   <input
                     type="password"
                     value={whatsappConfig.clientToken || ''}
                     onChange={e => setWhatsappConfig(prev => ({ ...prev, clientToken: e.target.value }))}
                     className="field-input"
-                    placeholder={settings?.whatsapp?.temTokenDeSeguranca ? 'Já preenchido' : 'Em Z-API, em Configurações > Segurança'}
+                    placeholder={
+                      settings?.whatsapp?.temTokenDeSeguranca
+                        ? 'Já preenchido. Deixe em branco para manter.'
+                        : 'Em Z-API: Segurança → Token de Segurança da Conta'
+                    }
                   />
                   <p className="text-caption text-brand-grayMid mt-1">
-                    Se você preencher, a Z-API só aceita chamadas vindas de um IP autorizado. É o
-                    que impede alguém que descubra o seu token de mandar mensagem em nome do salão.
+                    É uma credencial diferente do token da instância. Se a sua conta Z-API tem este
+                    recurso ativo, a API recusa <strong>toda</strong> chamada sem ele — inclusive o
+                    QR Code e a consulta de status. Se nunca foi ativado na sua conta, deixe em branco.
                   </p>
                 </div>
               )}
@@ -568,6 +598,15 @@ export function OwnerSettingsPage() {
                   className="field-input"
                   placeholder="https://api.z-api.io"
                 />
+                {/*
+                  Explicita o que a tela da Z-API mostra, porque colar a URL
+                  completa foi o que aconteceu e produziu uma mensagem de erro
+                  que apontava para a causa errada.
+                */}
+                <p className="text-caption text-brand-grayMid mt-1">
+                  Pode ser só <code className="bg-brand-gray px-1">https://api.z-api.io</code> ou a
+                  URL completa da tela de integração. As duas formas funcionam.
+                </p>
               </div>
             </div>
 

@@ -1,4 +1,10 @@
-import { sendWhatsAppMessage, getWhatsAppConfig, interpolateTemplate, clearWhatsAppCache } from '@config/whatsapp';
+import {
+  sendWhatsAppMessage,
+  sendWhatsAppMessageDetailed,
+  getWhatsAppConfig,
+  interpolateTemplate,
+  clearWhatsAppCache,
+} from '@config/whatsapp';
 import prisma from '@config/database';
 
 export interface VerificationCodeData {
@@ -210,10 +216,21 @@ export async function testWhatsAppConfig(phone: string): Promise<{ success: bool
     return { success: false, error: 'WhatsApp não configurado' };
   }
 
-  const success = await sendWhatsAppMessage({
+  /**
+   * A versão DETALHADA, e não a que devolve só `true`/`false`.
+   *
+   * Com a booleana, a tela dizia "Falha ao enviar mensagem de teste" para
+   * qualquer problema: credencial errada, número desconectado, conta sem
+   * saldo. A pessoa então mexia no telefone, quando o defeito estava na
+   * configuração — ou o contrário. O motivo da Z-API é a informação útil, e
+   * ela estava sendo jogada fora num `false`.
+   */
+  const resultado = await sendWhatsAppMessageDetailed({
     phone,
-    message: '✅ Teste de configuração do WhatsApp - Salao Beleza',
+    message: 'Teste de configuracao do WhatsApp. Se voce recebeu isto, a integracao esta funcionando.',
   });
 
-  return { success, error: success ? undefined : 'Falha ao enviar mensagem de teste' };
+  return resultado.ok
+    ? { success: true }
+    : { success: false, error: resultado.erro ?? 'Falha ao enviar mensagem de teste' };
 }

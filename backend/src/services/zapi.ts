@@ -1,4 +1,4 @@
-import { getWhatsAppConfig, type WhatsAppConfig } from '@config/whatsapp';
+import { getWhatsAppConfig, traduzErroZapi, type WhatsAppConfig } from '@config/whatsapp';
 
 /**
  * Cliente da Z-API.
@@ -46,13 +46,60 @@ export class ZApiError extends Error {
  */
 const TIMEOUT_MS = 10_000;
 
-function baseUrl(config: WhatsAppConfig): string {
-  // Barra final quebraria a URL: ".../instances//token/..." volta 404.
-  return config.apiUrl.replace(/\/+$/, '');
+/**
+ * Desmonta a URL que a Z-API mostra na tela.
+ *
+ * ── Por que isto existe ────────────────────────────────────────────────────
+ *
+ * O painel da Z-API não mostra "https://api.z-api.io". Ele mostra a URL
+ * inteira, já montada:
+ *
+ *   https://api.z-api.io/instances/3F9F.../token/60C6.../send-text
+ *
+ * E é essa URL que a pessoa copia e cola. Foi o que aconteceu na primeira
+ * configuração: o campo "URL da API" recebeu o endpoint completo, e o código
+ * montou a chamada por cima dele, produzindo isto:
+ *
+ *   .../send-text/instances/3F9F.../token/60C6.../status
+ *
+ * A Z-API respondia 404 e a tela dizia "Instance not found" — mensagem
+ * verdadeira, que apontava para a coisa errada. Um bug de configuração
+ * vestindo roupa de credencial inválida.
+ *
+ * Aceitar as duas formas é a correção honesta: a forma curta é a que a
+ * documentação descreve, e a longa é a que a tela da Z-API entrega. Exigir que
+ * a pessoa decifre a URL antes de colar não é validação, é trabalho inútil.
+ */
+function resolveEndpoint(config: WhatsAppConfig): {
+  base: string;
+  instanceId: string;
+  token: string;
+} {
+  const bruta = (config.apiUrl || '').trim().replace(/\/+$/, '');
+
+  // Casa `.../instances/{ID}/token/{TOKEN}` no meio ou no fim da URL.
+  const Embedded = bruta.match(/^(.*?)\/instances\/([^/]+)\/token\/([^/]+)/);
+
+  if (Embedded) {
+    return {
+      base: Embedded[1] || 'https://api.z-api.io',
+      instanceId: Embedded[2],
+      // O token da URL tem prioridade: se a pessoa colou o endpoint que veio da
+      // tela, é aquele que está certo.
+      token: Embedded[3],
+    };
+  }
+
+  return {
+    base: bruta || 'https://api.z-api.io',
+    instanceId: config.instanceId,
+    token: config.token,
+  };
 }
 
 function url(config: WhatsAppConfig, path: string): string {
-  return `${baseUrl(config)}/instances/${config.instanceId}/token/${config.token}/${path}`;
+  const { base, instanceId, token } = resolveEndpoint(config);
+  return `${base}/instances/${instanceId}/token/${token}/${path}`;
 }
 
 /**
@@ -111,7 +158,8 @@ async function call<T>(
   }
 
   if (!response.ok) {
-    throw new ZApiError(extrairErro(corpo) ?? `A Z-API respondeu ${response.status}`, response.status, corpo);
+    const bruto = extrairErro(corpo) ?? `A Z-API respondeu ${response.status}`;
+    throw new ZApiError(traduzErroZapi(bruto) ?? bruto, response.status, corpo);
   }
 
   return corpo as T;

@@ -6,6 +6,7 @@ import { useToast } from '@contexts/ToastContext';
 import { formatPhone, onlyDigits } from '@utils/validation';
 import { Button, Card, CardContent, Container, Section, Input, Separator } from '@components/ui';
 import { Spinner } from '@components/Dashboard';
+import { SalonBrand } from '@components/SalonBrand';
 
 type UserType = 'client' | 'owner' | 'employee';
 
@@ -224,7 +225,7 @@ export function LoginPage() {
           <CardContent>
             {/* Logo */}
             <div className="text-center mb-10">
-              <span className="font-display font-bold text-display-sm tracking-tight">MR. CUT</span>
+              <SalonBrand size="lg" />
               <p className="text-body-sm text-brand-grayMid mt-2">Acesse sua conta</p>
             </div>
 
@@ -364,7 +365,7 @@ export function LoginPage() {
 
             <Separator className="my-8" />
             <p className="text-caption text-brand-grayMid text-center">
-              MR. CUT — Barbearia Premium
+              Agendamento online
             </p>
           </CardContent>
         </Card>

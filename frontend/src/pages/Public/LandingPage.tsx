@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Section, Container, Card, CardContent, Badge, Button, Separator } from '@components/ui';
-import { publicApi, servicesApi } from '@services/api';
+import { servicesApi } from '@services/api';
 import { formatPhone } from '@utils/validation';
+import { useSalon } from '@contexts/SalonContext';
 
 /**
  * Galeria em collage editorial: uma célula grande à esquerda (2 linhas) e
@@ -17,51 +18,38 @@ const galleryImages = [
 ];
 
 const WEEKDAYS = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
-const WEEKDAYS_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-
-/** "09:00 — 19:00" */
+/** "09:00" vira "09h" para o texto corrido do hero. */
 const hora = (v: string) => v.replace(':', 'h');
 
 export function LandingPage() {
   /**
    * Nome, endereço, telefone e horário vêm do MESMO registro que o dono
-   * edita em Configurações. Estavam fixos no arquivo ("MR. CUT", três
-   * unidades em São Paulo) e divergiam do banco — o cliente via um
-   * endereço na landing e outro no agendamento.
+   * edita em Configurações — e do mesmo contexto que alimenta header,
+   * sidebar e rodapé. Estavam fixos no arquivo ("MR. CUT", três unidades em
+   * São Paulo) e divergiam do banco: o cliente via um endereço na landing e
+   * outro no agendamento.
    */
-  const [salon, setSalon] = useState<{
-    name: string;
-    phone?: string | null;
-    email?: string | null;
-    address?: string | null;
-    description?: string | null;
-    businessHours: Record<string, { open: string; close: string } | null>;
-  } | null>(null);
+  const { salon } = useSalon();
 
   const [servicos, setServicos] = useState<
     Array<{ id: string; name: string; description?: string | null; durationMinutes: number; price: number }>
   >([]);
 
   useEffect(() => {
-    publicApi.getSalon().then((r) => setSalon(r.salon)).catch(() => setSalon(null));
     servicesApi
       .getPublic()
       .then((r) => setServicos(r.services))
       .catch(() => setServicos([]));
   }, []);
 
-  // Enquanto carrega, usa o nome salvo para o cabeçalho não piscar vazio.
-  const nome = salon?.name || 'Meu Salão';
+  // Sem fallback literal: um nome genérico aqui esconderia o nome real até
+  // o GET voltar, que é o que a gente quer evitar. Enquanto não há nome, o
+  // hero fica sem a linha — some no primeiro render.
+  const nome = salon?.name ?? '';
 
   const horariosAbertos = Object.entries(salon?.businessHours || {}).filter(
     ([, v]) => v !== null
   );
-  const resumoHorario =
-    horariosAbertos.length === 0
-      ? 'Consulte os horários'
-      : `${WEEKDAYS_SHORT[Number(horariosAbertos[0][0])]} a ${
-          WEEKDAYS_SHORT[Number(horariosAbertos[horariosAbertos.length - 1][0])]
-        } · ${hora(horariosAbertos[0][1]!.open)} — ${hora(horariosAbertos[0][1]!.close)}`;
 
   return (
     <div className="min-h-screen bg-brand-white text-brand-black">
@@ -70,15 +58,15 @@ export function LandingPage() {
         <Container>
           <div className="grid md:grid-cols-2 gap-12 lg:gap-20 items-center">
             <div className="max-w-xl">
-              <Badge variant="outline" className="mb-6">SALÃO</Badge>
-              <h1 className="text-display-xl md:text-display-lg leading-[0.9] mb-6">
+              <Badge variant="outline" className="mb-6">AGENDAMENTO ONLINE</Badge>
+              {/* O nome entra com a altura da linha reservada: sem ele o h1
+                  pulava de posição quando o GET voltava. */}
+              <h1 className="text-display-xl md:text-display-lg leading-[0.9] mb-6 min-h-[2lh]">
                 {nome}
-                <br />
-                <span className="text-brand-grayMid font-normal">AGENDAMENTO ONLINE</span>
               </h1>
               <p className="text-body-lg text-brand-grayMid mb-10 max-w-md">
                 {salon?.description ||
-                  'Agende online, escolha o profissional e o horário. Escolha de serviço, profissional e horário, com confirmação na hora.'}
+                  'Escolha o serviço, o profissional e o horário. A confirmação chega na hora e você acompanha tudo pela sua conta.'}
               </p>
               <div className="flex flex-wrap gap-4">
                 <Link to="/agendar">
@@ -95,7 +83,7 @@ export function LandingPage() {
               <div className="relative aspect-portrait overflow-hidden">
                 <img
                   src="https://images.unsplash.com/photo-1585747860715-2ba37e788b70?w=800&q=80"
-                  alt="Interior da barbearia MR. CUT"
+                  alt={`Interior de ${nome}`}
                   className="w-full h-full object-cover"
                 />
                 <div className="overlay-gradient" />
@@ -114,13 +102,18 @@ export function LandingPage() {
           <Container>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 py-12 md:py-16">
               {[
-                { value: String(servicos.length), label: 'Serviços' },
-                { value: resumoHorario.split('·')[1]?.trim() || '—', label: 'Horário' },
+                { value: servicos.length > 0 ? String(servicos.length) : '—', label: 'Serviços' },
                 {
-                  value: salon?.phone ? hora(formatPhone(salon.phone).replace(/[^\d:]/g, (m) => (m === ':' ? ':' : ''))) : '—',
-                  label: 'Contato',
+                  value: horariosAbertos[0]?.[1]
+                    ? `${hora(horariosAbertos[0][1].open)} — ${hora(horariosAbertos[0][1].close)}`
+                    : '—',
+                  label: 'Horário',
                 },
-                { value: '100%', label: 'Online' },
+                { value: salon?.phone ? formatPhone(salon.phone) : '—', label: 'Contato' },
+                {
+                  value: horariosAbertos.length > 0 ? `${horariosAbertos.length} dias` : '—',
+                  label: 'Aberto por semana',
+                },
               ].map((stat) => (
                 <div key={stat.label} className="text-center border-l border-brand-gray first:border-0 pl-8 first:pl-0">
                   <p className="font-display font-bold text-display-lg md:text-display-xl">{stat.value}</p>

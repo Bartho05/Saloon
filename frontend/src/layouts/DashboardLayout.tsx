@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Sidebar } from '@components/Sidebar';
+import { SalonBrand } from '@components/SalonBrand';
 import { useAuth } from '@hooks/useAuth';
 
 interface DashboardLayoutProps {
@@ -54,7 +55,7 @@ export function DashboardLayout({ variant }: DashboardLayoutProps) {
         {/* Header mobile */}
         <header className="lg:hidden sticky top-0 z-40 bg-brand-white border-b border-brand-gray">
           <div className="flex items-center justify-between h-16 px-4">
-            <span className="font-display font-bold text-body">MR. CUT</span>
+            <SalonBrand size="sm" />
             <button
               onClick={() => setMobileOpen(true)}
               className="p-2 -mr-2 text-brand-black"

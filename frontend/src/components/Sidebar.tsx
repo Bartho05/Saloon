@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '@hooks/useAuth';
+import { SalonBrand } from '@components/SalonBrand';
 import {
   HomeIcon,
   ScissorsIcon,
@@ -96,7 +97,7 @@ export function Sidebar({ variant, onNavigate }: SidebarProps) {
     <div className="flex flex-col h-full bg-brand-white">
       {/* Brand */}
       <div className="flex items-center justify-between h-16 px-5 border-b border-brand-gray flex-shrink-0">
-        <span className="font-display font-bold text-body-lg tracking-tight">MR. CUT</span>
+        <SalonBrand size="md" />
         {onNavigate && (
           <button
             onClick={onNavigate}

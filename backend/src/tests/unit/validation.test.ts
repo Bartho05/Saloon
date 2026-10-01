@@ -344,6 +344,25 @@ describe('Validation Schemas', () => {
   });
 
   describe('updateSettingsSchema', () => {
+    it('deve aceitar email vazio como "limpar"', () => {
+      // O formulário manda string vazia no campo de e-mail. Com `.email()`
+      // puro isso reprovava e o dono não conseguia salvar NENHUMA
+      // alteração enquanto o e-mail não estivesse preenchido — inclusive
+      // a troca do nome da marca.
+      const limpo = updateSettingsSchema.parse({ name: 'Salão', email: '' });
+      expect(limpo.email).toBeNull();
+
+      // E um e-mail válido continua passando, já normalizado.
+      const valido = updateSettingsSchema.parse({
+        name: 'Salão',
+        email: '  contato@salon.com.br  ',
+      });
+      expect(valido.email).toBe('contato@salon.com.br');
+    });
+
+    it('deve rejeitar email que não é email', () => {
+      expect(() => updateSettingsSchema.parse({ name: 'Salão', email: 'nao-e-email' })).toThrow();
+    });
     it('should accept valid business hours', () => {
       const result = updateSettingsSchema.parse({
         name: 'Meu Salão',

@@ -1,8 +1,12 @@
 import { Outlet } from 'react-router-dom';
 import { SiteHeader } from '@components/SiteHeader';
 import { Container } from '@components/ui';
+import { SalonBrand } from '@components/SalonBrand';
+import { useSalonName } from '@contexts/SalonContext';
 
 export function PublicLayout() {
+  const { name } = useSalonName();
+
   return (
     <div className="min-h-screen bg-brand-white flex flex-col">
       <SiteHeader />
@@ -15,10 +19,14 @@ export function PublicLayout() {
       <footer className="border-t border-brand-gray py-10 mt-auto">
         <Container>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p className="font-display font-bold text-body">MR. CUT</p>
-            <p className="text-caption text-brand-grayMid">
-              &copy; {new Date().getFullYear()} MR. CUT. Todos os direitos reservados.
+            <p>
+              <SalonBrand size="sm" />
             </p>
+            {name && (
+              <p className="text-caption text-brand-grayMid">
+                &copy; {new Date().getFullYear()} {name}. Todos os direitos reservados.
+              </p>
+            )}
           </div>
         </Container>
       </footer>

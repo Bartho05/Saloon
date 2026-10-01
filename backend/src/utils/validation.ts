@@ -120,7 +120,17 @@ export const listAppointmentsSchema = z.object({
 export const updateSettingsSchema = z.object({
   name: z.string().min(2).max(100).optional(),
   phone: phoneSchema.optional(),
-  email: z.string().email().optional().nullable(),
+  // O formulário manda '' quando o campo está vazio, e `.email()` reprova
+  // string vazia: o dono não conseguia salvar nenhuma alteração enquanto o
+  // e-mail não estivesse preenchido. String vazia vira null (limpar).
+  email: z
+    .string()
+    .trim()
+    .email('E-mail inválido')
+    .optional()
+    .nullable()
+    .or(z.literal(''))
+    .transform((v) => (v === '' ? null : v)),
   address: z.string().max(200).optional(),
   businessHours: z
     .object({

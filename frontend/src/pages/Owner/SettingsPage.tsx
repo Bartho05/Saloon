@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { ownerApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
+import { useSalon } from '@contexts/SalonContext';
 import { PhoneInput } from '@components/PhoneInput';
 
 export function OwnerSettingsPage() {
   const { showToast } = useToast();
+  const { refreshSalon } = useSalon();
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -93,6 +95,10 @@ export function OwnerSettingsPage() {
         businessHours,
       };
       await ownerApi.updateSettings(data);
+      // O nome da marca vive num contexto com cache próprio. Sem esta
+      // chamada, trocar o nome aqui só mudaria a tela atual — header,
+      // sidebar e rodapé continuariam com o nome antigo até recarregar.
+      await refreshSalon();
       showToast({ type: 'success', title: 'Configurações salvas' });
       loadSettings();
     } catch (err: any) {

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Container, Button } from '@components/ui';
 import { MenuIcon, CloseIcon } from '@components/icons';
+import { SalonBrand } from '@components/SalonBrand';
 
 // Só aponta para seções que existem. "Unidades" e "Avaliações" saíram da
 // landing (o salão é único e as avaliações eram fictícias) — deixar os links
@@ -80,12 +81,8 @@ export function SiteHeader() {
     <header className="fixed top-0 left-0 right-0 z-50 bg-brand-white/95 backdrop-blur-md border-b border-brand-gray">
       <Container>
         <div className="flex items-center justify-between h-16 md:h-20">
-          <Link
-            to="/"
-            className="font-display font-bold text-display-sm tracking-tight"
-            aria-label="MR. CUT — página inicial"
-          >
-            MR. CUT
+          <Link to="/" className="font-display font-bold text-display-sm tracking-tight">
+            <SalonBrand size="lg" />
           </Link>
 
           {/* Desktop */}

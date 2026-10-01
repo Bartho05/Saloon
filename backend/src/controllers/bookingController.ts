@@ -150,7 +150,8 @@ export async function getClientAppointments(req: AuthRequest, res: Response): Pr
       take: parseInt(limit as string),
       include: {
         service: { select: { id: true, name: true, durationMinutes: true, price: true } },
-        employee: { select: { id: true, name: true } },
+        // photoUrl: o cliente vê com quem está agendando
+        employee: { select: { id: true, name: true, photoUrl: true } },
       },
     }),
     prisma.appointment.count({ where }),
@@ -235,6 +236,8 @@ export async function getPublicEmployees(req: AuthRequest, res: Response): Promi
       id: true,
       name: true,
       specialties: true,
+      // o cliente escolhe com quem quer fazer o agendamento — mostra o rosto
+      photoUrl: true,
     },
   });
 

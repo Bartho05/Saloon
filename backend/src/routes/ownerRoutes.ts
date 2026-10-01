@@ -3,6 +3,7 @@ import * as serviceController from '@controllers/serviceController';
 import * as employeeController from '@controllers/employeeController';
 import * as appointmentController from '@controllers/appointmentController';
 import * as settingsController from '@controllers/settingsController';
+import { uploadImage } from '@services/uploadService';
 import { authMiddleware, ownerMiddleware } from '@middlewares/auth';
 import {
   createServiceSchema,
@@ -50,5 +51,22 @@ router.post('/settings/run-reminder-job', asyncHandler(settingsController.runRem
 
 // Financeiro
 router.get('/financial', validateQuery(financialQuerySchema), asyncHandler(settingsController.getFinancialOverview));
+
+// Logo do salão
+router.post('/settings/logo', uploadImage.single('photo'), asyncHandler(settingsController.uploadSalonLogo));
+router.delete('/settings/logo', asyncHandler(settingsController.removeSalonLogo));
+
+// Foto dos funcionários
+router.patch(
+  '/employees/:id/photo',
+  validateParams(uuidParamSchema),
+  uploadImage.single('photo'),
+  asyncHandler(employeeController.uploadEmployeePhoto)
+);
+router.delete(
+  '/employees/:id/photo',
+  validateParams(uuidParamSchema),
+  asyncHandler(employeeController.removeEmployeePhoto)
+);
 
 export default router;

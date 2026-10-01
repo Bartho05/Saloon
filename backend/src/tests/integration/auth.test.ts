@@ -63,12 +63,23 @@ describe('Auth Integration Tests', () => {
     });
 
     it('should reject invalid password', async () => {
+      // 6+ caracteres: abaixo disso o schema rejeita com 400 antes mesmo de
+      // comparar com o hash, e o teste estaria medindo validação, não credencial.
       const res = await request(app)
         .post('/auth/owner/login')
-        .send({ email: 'owner.auth@test.com', password: 'wrong' })
+        .send({ email: 'owner.auth@test.com', password: 'senhaerrada' })
         .expect(401);
 
       expect(res.body.code).toBe('INVALID_CREDENTIALS');
+    });
+
+    it('should reject a too-short password with 400 before hitting the database', async () => {
+      const res = await request(app)
+        .post('/auth/owner/login')
+        .send({ email: 'owner.auth@test.com', password: '123' })
+        .expect(400);
+
+      expect(res.body.code).toBe('VALIDATION_ERROR');
     });
 
     it('should reject non-existent email', async () => {
@@ -140,10 +151,15 @@ describe('Auth Integration Tests', () => {
         .send({ phone: '11977773333' })
         .expect(200);
 
-      expect(res.body.sent).toBe(true);
-      // Em dev, retorna o código
+      // `sent` reflete se o WhatsApp está configurado. Na suíte ele não
+      // está (o `.env.test` não tem credenciais), então exigir `true`
+      // seria testar configuração de terceiro, não o fluxo de autenticação.
+      expect(typeof res.body.sent).toBe('boolean');
+
+      // Fora de produção o código volta na resposta — é o que permite o
+      // fluxo ser testado de ponta a ponta sem WhatsApp.
       if (process.env.NODE_ENV !== 'production') {
-        expect(res.body.code).toBeDefined();
+        expect(res.body.code).toMatch(/^\d{6}$/);
       }
     });
 
@@ -205,7 +221,18 @@ describe('Auth Integration Tests', () => {
 
       expect(res.body.accessToken).toBeDefined();
       expect(res.body.refreshToken).toBeDefined();
-      expect(res.body.accessToken).not.toBe(loginRes.body.accessToken);
+
+      // NÃO se pode exigir que o novo token difira do antigo: um JWT é
+      // assinado a partir de (payload, segredo) e o payload inclui `iat` em
+      // segundos. Um refresh feito no mesmo segundo do login produz
+      // exatamente a mesma string — e isso está correto.
+      // O que precisa valer é que o token novo funciona.
+      const me = await request(app)
+        .get('/auth/me')
+        .set('Authorization', `Bearer ${res.body.accessToken}`)
+        .expect(200);
+
+      expect(me.body.user.email).toBe('owner.auth@test.com');
     });
 
     it('should reject invalid refresh token', async () => {
@@ -241,14 +268,16 @@ describe('Auth Integration Tests', () => {
 
     it('should return client data with client token', async () => {
       // Cria cliente via verify-code
-      await request(app)
+      const requestRes = await request(app)
         .post('/auth/client/request-code')
         .send({ phone: '11977776666' })
         .expect(200);
 
+      // Usa o código que a API devolveu, e não um fixo: fora de produção o
+      // código é aleatório e '123456' quase nunca é o válido.
       const verifyRes = await request(app)
         .post('/auth/client/verify-code')
-        .send({ phone: '11977776666', code: '123456' })
+        .send({ phone: '11977776666', code: requestRes.body.code })
         .expect(200);
 
       const res = await request(app)

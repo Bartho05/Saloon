@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { employeeApi } from '@services/api';
+import { employeeApi, uploadApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatPhone } from '@utils/validation';
 import { Container, Card, CardContent, Button } from '@components/ui';
 import { PageHeader, PageSpinner } from '@components/Dashboard';
+import { ImageUpload } from '@components/ImageUpload';
 import { PhoneIcon, ShieldIcon, CopyIcon, CheckIcon, ClockIcon } from '@components/icons';
 
 export function EmployeeProfilePage() {
@@ -50,9 +51,17 @@ export function EmployeeProfilePage() {
         <Card className="lg:col-span-1">
           <CardContent>
             <div className="flex flex-col items-center text-center pb-6 border-b border-brand-gray">
-              <div className="w-20 h-20 bg-brand-black text-brand-white flex items-center justify-center font-display font-bold text-display-md mb-4">
-                {(profile?.name || '?').charAt(0).toUpperCase()}
-              </div>
+              {profile?.photoUrl ? (
+                <img
+                  src={profile.photoUrl}
+                  alt={`Foto de ${profile?.name || 'funcionário'}`}
+                  className="w-20 h-20 object-cover mb-4"
+                />
+              ) : (
+                <div className="w-20 h-20 bg-brand-black text-brand-white flex items-center justify-center font-display font-bold text-display-md mb-4">
+                  {(profile?.name || '?').charAt(0).toUpperCase()}
+                </div>
+              )}
               <h2 className="font-display font-bold text-display-sm">{profile?.name || 'Funcionário'}</h2>
               <p className="text-caption text-brand-grayMid mt-1">Profissional do salão</p>
             </div>
@@ -110,6 +119,35 @@ export function EmployeeProfilePage() {
                 Guarde o código com segurança. Se suspeitar que alguém teve acesso, peça ao
                 proprietário para gerar um novo.
               </p>
+            </CardContent>
+          </Card>
+
+          {/* Foto do rosto */}
+          <Card>
+            <div className="px-5 md:px-6 py-4 border-b border-brand-gray">
+              <h3 className="font-display font-semibold text-body">Minha foto</h3>
+              <p className="text-caption text-brand-grayMid mt-0.5">
+                É a foto que o cliente vê ao escolher você.
+              </p>
+            </div>
+            <CardContent>
+              <ImageUpload
+                label=""
+                shape="circle"
+                value={profile?.photoUrl ?? null}
+                onUpload={async (file) => {
+                  await uploadApi.myPhoto(file);
+                  const res = await employeeApi.getProfile();
+                  setProfile(res.employee);
+                  showToast({ type: 'success', title: 'Foto atualizada' });
+                }}
+                onRemove={async () => {
+                  const res = await uploadApi.removeMyPhoto();
+                  setProfile(res.employee);
+                  showToast({ type: 'success', title: 'Foto removida' });
+                }}
+                hint="Uma foto boa e nítida gera mais confiança no agendamento. JPEG, PNG ou WEBP, até 4MB."
+              />
             </CardContent>
           </Card>
 

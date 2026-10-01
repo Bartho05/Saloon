@@ -4,7 +4,7 @@ import { Sidebar } from '@components/Sidebar';
 import { useAuth } from '@hooks/useAuth';
 
 interface DashboardLayoutProps {
-  variant: 'owner' | 'employee';
+  variant: 'owner' | 'employee' | 'client';
 }
 
 export function DashboardLayout({ variant }: DashboardLayoutProps) {

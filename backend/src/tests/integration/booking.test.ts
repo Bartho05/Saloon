@@ -4,6 +4,19 @@ import app from '@app';
 import prisma from '@config/database';
 import bcrypt from 'bcryptjs';
 
+/**
+ * `date.toISOString().split('T')[0]` devolve a data em UTC, não a local.
+ *
+ * O `?date=` da API é um dia civil do salão (horário de Brasília), então
+ * usar UTC faz o teste consultar o dia errado: às 21h local de um domingo,
+ * o ISO já é segunda-feira. Estos testes rodavam e passavam às 10h da
+ * manhã e falhavam à noite — o defeito estava escondido pelo relógio.
+ */
+const localDateKey = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate()
+  ).padStart(2, '0')}`;
+
 describe('Booking Integration Tests', () => {
   let ownerToken: string;
   let employeeToken: string;
@@ -130,7 +143,7 @@ describe('Booking Integration Tests', () => {
     it('should return available slots for a day', async () => {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const dateStr = tomorrow.toISOString().split('T')[0];
+      const dateStr = localDateKey(tomorrow);
 
       const res = await request(app)
         .get('/booking/slots')
@@ -145,8 +158,12 @@ describe('Booking Integration Tests', () => {
 
     it('should return blocked for Sunday', async () => {
       const sunday = new Date();
-      sunday.setDate(sunday.getDate() + ((7 - sunday.getDay()) % 7));
-      const dateStr = sunday.toISOString().split('T')[0];
+      // +7 se já for domingo, senão avança até o próximo
+      sunday.setDate(sunday.getDate() + (sunday.getDay() === 0 ? 7 : 7 - sunday.getDay()));
+      const dateStr = localDateKey(sunday);
+
+      // sanidade: o dia escolhido tem que ser realmente domingo
+      expect(sunday.getDay()).toBe(0);
 
       const res = await request(app)
         .get('/booking/slots')
@@ -161,7 +178,7 @@ describe('Booking Integration Tests', () => {
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       tomorrow.setHours(10, 0, 0, 0);
-      const dateStr = tomorrow.toISOString().split('T')[0];
+      const dateStr = localDateKey(tomorrow);
 
       // Cria agendamento existente
       await prisma.appointment.create({
@@ -182,11 +199,16 @@ describe('Booking Integration Tests', () => {
         .query({ employeeId, serviceId, date: dateStr })
         .expect(200);
 
-      // Slot das 10:00 deve estar indisponível
-      const slot10 = res.body.slots.find((s: any) =>
-        s.start.includes('T10:00:00')
+      // A API devolve os slots em ISO/UTC. 10:00 de Brasília é 13:00 UTC —
+      // comparar com 'T10:00:00' nunca encontrava nada e o teste passava
+      // por `slot10?.available === undefined`... que aliás é exatamente a
+      // falha que ele devia dar. Busca pelo instante real do agendamento.
+      const slot10 = res.body.slots.find(
+        (s: any) => new Date(s.start).getTime() === tomorrow.getTime()
       );
-      expect(slot10?.available).toBe(false);
+
+      expect(slot10).toBeDefined();
+      expect(slot10.available).toBe(false);
     });
   });
 
@@ -310,10 +332,19 @@ describe('Booking Integration Tests', () => {
       });
       appointmentId = appointment.id;
 
-      // Login cliente (simula verificação de código)
+      // Login cliente: pede o código e usa o que a API devolveu. Fora de
+      // produção o código é aleatório — fixar '123456' fazia o verify
+      // devolver 401 e o token virava undefined, derrubando os três testes
+      // abaixo por um motivo que não tinha nada a ver com o agendamento.
+      const codeRes = await request(app)
+        .post('/auth/client/request-code')
+        .send({ phone: '11955554444' })
+        .expect(200);
+
       const verifyRes = await request(app)
         .post('/auth/client/verify-code')
-        .send({ phone: '11955554444', code: '123456' });
+        .send({ phone: '11955554444', code: codeRes.body.code })
+        .expect(200);
       clientToken = verifyRes.body.accessToken;
     });
 
@@ -352,7 +383,8 @@ describe('Booking Integration Tests', () => {
         .set('Authorization', `Bearer ${clientToken}`)
         .expect(400);
 
-      expect(res.body.error).toContain('apenas agendamentos agendados');
+      expect(res.body.code).toBe('APPOINTMENT_NOT_CANCELLABLE');
+      expect(res.body.error).toContain('Apenas agendamentos agendados');
     });
   });
 });

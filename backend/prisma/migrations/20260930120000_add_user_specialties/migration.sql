@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "specialties" TEXT[] DEFAULT ARRAY[]::TEXT[];
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "color" TEXT;

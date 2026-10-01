@@ -1,10 +1,12 @@
 import { Router } from 'express';
 import * as appointmentController from '@controllers/appointmentController';
 import * as employeeController from '@controllers/employeeController';
+import * as settingsController from '@controllers/settingsController';
 import { authMiddleware, employeeMiddleware } from '@middlewares/auth';
-import { uuidParamSchema, updateAppointmentStatusSchema, listAppointmentsSchema, financialQuerySchema } from '@utils/validation';
+import { uuidParamSchema, updateAppointmentStatusSchema, listAppointmentsSchema, financialQuerySchema, employeeSalonInfoSchema } from '@utils/validation';
 import { validateParams, validateBody, validateQuery } from '@middlewares/validate';
 import { asyncHandler } from '@middlewares/errorHandler';
+import { uploadImage } from '@services/uploadService';
 
 const router = Router();
 
@@ -22,5 +24,22 @@ router.patch('/appointments/:id/status', validateParams(uuidParamSchema), valida
 
 // Controle financeiro do próprio funcionário
 router.get('/financial', validateQuery(financialQuerySchema), asyncHandler(employeeController.getMyFinancials));
+
+// Foto do rosto
+router.patch('/photo', uploadImage.single('photo'), asyncHandler(employeeController.uploadMyPhoto));
+router.delete('/photo', asyncHandler(employeeController.removeMyPhoto));
+
+// Dados do salão — o funcionário mantém nome/telefone/endereço/logo
+router.get('/salon', asyncHandler(settingsController.getSalonForEmployee));
+router.patch(
+  '/salon',
+  validateBody(employeeSalonInfoSchema),
+  asyncHandler(settingsController.updateSalonByEmployee)
+);
+router.post(
+  '/salon/logo',
+  uploadImage.single('photo'),
+  asyncHandler(settingsController.uploadSalonLogoByEmployee)
+);
 
 export default router;

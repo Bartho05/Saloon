@@ -2,6 +2,8 @@ import express, { Router } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import path from 'node:path';
+import { UPLOAD_ROOT } from '@services/uploadService';
 import { env } from '@config/env';
 import { globalRateLimiter } from '@middlewares/rateLimiter';
 import { errorHandler, notFoundHandler } from '@middlewares/errorHandler';
@@ -29,6 +31,16 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Imagens enviadas (logo do salão, foto dos funcionários)
+app.use(
+  '/uploads',
+  express.static(UPLOAD_ROOT, {
+    maxAge: '7d',
+    // o nome do arquivo já é aleatório, mas o path resolve é defensivo
+    dotfiles: 'deny',
+  })
+);
 app.use(morgan(env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 app.use(globalRateLimiter);
 

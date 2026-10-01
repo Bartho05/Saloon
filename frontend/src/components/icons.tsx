@@ -120,6 +120,10 @@ export const DownloadIcon = ({ className }: IconProps) => (
   <svg {...base} className={className}><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M4 20h16" /></svg>
 );
 
+export const UploadIcon = ({ className }: IconProps) => (
+  <svg {...base} className={className}><path d="M12 21V9M7.5 13.5 12 9l4.5 4.5M4 4h16" /></svg>
+);
+
 /* ---------- Contato / misc ---------- */
 
 export const PhoneIcon = ({ className }: IconProps) => (

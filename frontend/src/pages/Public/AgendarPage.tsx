@@ -115,10 +115,18 @@ export function AgendarPage() {
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); actions.setEmployee(emp); } }}
             >
               <CardContent className="flex items-center gap-4 p-4 md:p-6">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-brand-grayLight border border-brand-gray flex items-center justify-center overflow-hidden flex-shrink-0">
-                  <span className="font-display font-bold text-body-lg text-brand-grayMid">
-                    {emp.name.charAt(0)}
-                  </span>
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-grayLight border border-brand-gray flex items-center justify-center overflow-hidden flex-shrink-0">
+                  {emp.photoUrl ? (
+                    <img
+                      src={emp.photoUrl}
+                      alt={`Foto de ${emp.name}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span className="font-display font-bold text-body-lg text-brand-grayMid">
+                      {emp.name.charAt(0)}
+                    </span>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <h3 className="font-display font-semibold text-body-lg">{emp.name}</h3>

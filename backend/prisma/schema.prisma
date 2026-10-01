@@ -33,6 +33,7 @@ model User {
   isActive      Boolean   @default(true)
   specialties   String[]  @default([])
   color         String?
+  photoUrl      String?  // foto do rosto, para o cliente ver com quem vai agendar
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -102,6 +103,8 @@ model SalonSettings {
   phone              String?
   email              String?
   address            String?
+  logoUrl            String?  // caminho público em /uploads (ex.: /uploads/salon/logo-abc.jpg)
+  description        String?
   businessHours      Json     // { "0": null, "1": { "open": "09:00", "close": "19:00" }, ... }
   timezone           String   @default("America/Sao_Paulo")
   birthdayMessage    String?  // Template: "Olá {nome}! Feliz aniversário! Venha comemorar com a gente no {salao} 🎂"

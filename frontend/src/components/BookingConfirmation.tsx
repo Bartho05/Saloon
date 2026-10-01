@@ -38,7 +38,27 @@ export function BookingConfirmation({
         <CardContent>
           <dl className="space-y-0">
             <Row label="Serviço" value={service.name} />
-            <Row label="Profissional" value={employee.name} />
+            <Row
+              label="Profissional"
+              value={
+                <span className="inline-flex items-center gap-2">
+                  {employee.photoUrl ? (
+                    <img
+                      src={employee.photoUrl}
+                      alt=""
+                      className="w-6 h-6 object-cover border border-brand-gray flex-shrink-0"
+                    />
+                  ) : (
+                    <span className="w-6 h-6 bg-brand-grayLight border border-brand-gray flex items-center justify-center flex-shrink-0">
+                      <span className="font-display font-bold text-caption text-brand-grayMid">
+                        {employee.name.charAt(0).toUpperCase()}
+                      </span>
+                    </span>
+                  )}
+                  {employee.name}
+                </span>
+              }
+            />
             <Row
               label="Data"
               value={format(slot.start, "EEEE, dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
@@ -98,7 +118,7 @@ export function BookingConfirmation({
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between py-4 border-b border-brand-gray">
       <dt className="font-display text-caption text-brand-grayMid">{label}</dt>

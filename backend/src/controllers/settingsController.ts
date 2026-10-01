@@ -6,6 +6,7 @@ import { AppError } from '@middlewares/errorHandler';
 import { invalidateWhatsAppCache, testWhatsAppConfig } from '@services/whatsappService';
 import { runBirthdayJobNow, runReminderJobNow } from '@services/cronService';
 import { getOwnerFinancialOverview } from '@services/financialService';
+import { persistImage, removeImage } from '@services/uploadService';
 
 type WhatsappConfig = {
   provider?: string;
@@ -27,11 +28,124 @@ function sanitizeSettings<T extends { whatsappApiConfig?: unknown }>(settings: T
 }
 
 /**
+ * GET /employee/salon
+ * Dados públicos do salão, visíveis ao funcionário logado.
+ */
+export async function getSalonForEmployee(req: AuthRequest, res: Response): Promise<void> {
+  let settings = await prisma.salonSettings.findUnique({ where: { id: 1 } });
+
+  if (!settings) {
+    settings = await prisma.salonSettings.create({
+      data: {
+        id: 1,
+        name: 'Meu Salão',
+        businessHours: {},
+      },
+    });
+  }
+
+  res.json(sanitizeSettings(settings));
+}
+
+/**
+ * PATCH /employee/salon
+ * funcionário atualiza apenas a identidade do salão.
+ * Os campos operacionais são filtrados pelo schema antes de chegar aqui.
+ */
+export async function updateSalonByEmployee(req: AuthRequest, res: Response): Promise<void> {
+  const data = {
+    ...req.body,
+    email: req.body.email || null,
+  };
+
+  const settings = await prisma.salonSettings.update({
+    where: { id: 1 },
+    data,
+  });
+
+  res.json(sanitizeSettings(settings));
+}
+
+/**
+ * POST /employee/salon/logo
+ */
+export async function uploadSalonLogoByEmployee(req: AuthRequest, res: Response): Promise<void> {
+  const file = req.file;
+  if (!file) {
+    throw new AppError('Envie um arquivo de imagem', 400, 'FILE_REQUIRED');
+  }
+
+  const current = await prisma.salonSettings.findUnique({
+    where: { id: 1 },
+    select: { logoUrl: true },
+  });
+
+  const logoUrl = persistImage(file.path, 'salon', 'logo');
+  removeImage(current?.logoUrl);
+
+  const settings = await prisma.salonSettings.update({
+    where: { id: 1 },
+    data: { logoUrl },
+  });
+
+  res.json(sanitizeSettings(settings));
+}
+
+/**
+ * POST /owner/settings/logo
+ * Envia o logo do salão. Aceita owner e funcionário (ambos mantêm os dados
+ * do salão atualizados).
+ */
+export async function uploadSalonLogo(req: AuthRequest, res: Response): Promise<void> {
+  const file = req.file;
+
+  if (!file) {
+    throw new AppError('Envie um arquivo de imagem', 400, 'FILE_REQUIRED');
+  }
+
+  const current = await prisma.salonSettings.findUnique({
+    where: { id: 1 },
+    select: { logoUrl: true },
+  });
+
+  const logoUrl = persistImage(file.path, 'salon', 'logo');
+
+  // só remove a imagem antiga depois que a nova foi gravada com sucesso
+  removeImage(current?.logoUrl);
+
+  const settings = await prisma.salonSettings.update({
+    where: { id: 1 },
+    data: { logoUrl },
+  });
+
+  res.json(sanitizeSettings(settings));
+}
+
+/**
+ * POST /owner/settings/logo/remove
+ * Remove o logo e volta ao inicial (letra).
+ */
+export async function removeSalonLogo(req: AuthRequest, res: Response): Promise<void> {
+  const current = await prisma.salonSettings.findUnique({
+    where: { id: 1 },
+    select: { logoUrl: true },
+  });
+
+  removeImage(current?.logoUrl);
+
+  const settings = await prisma.salonSettings.update({
+    where: { id: 1 },
+    data: { logoUrl: null },
+  });
+
+  res.json(sanitizeSettings(settings));
+}
+
+/**
  * GET /owner/settings
  * Busca configurações do salão
  */
-export async function getSettings(req: AuthRequest, res: Response): Promise<void> {
-  let settings = await prisma.salonSettings.findUnique({
+export async function getSettings(req: AuthRequest, res: Response): Promise<void> {  let settings = await prisma.salonSettings.findUnique({
     where: { id: 1 },
   });
 

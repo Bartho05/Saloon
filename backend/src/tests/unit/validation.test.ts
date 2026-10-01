@@ -16,8 +16,23 @@ import {
   updateAppointmentStatusSchema,
   listAppointmentsSchema,
   updateSettingsSchema,
+  financialQuerySchema,
+  employeeSalonInfoSchema,
   uuidParamSchema,
 } from '@utils/validation';
+
+/**
+ * Os schemas validam o objeto DIRETO — quem desembrulha `req.body`,
+ * `req.query` e `req.params` são os middlewares `validateBody`,
+ * `validateQuery` e `validateParams`.
+ *
+ * A versão anterior desta suíte passava `{ body: {...}, params: {...} }`
+ * (formato Express cru) e por isso falhava em 15 casos: não era a
+ * aplicação que estava quebrada, era o teste descrevendo um contrato que
+ * não existe mais.
+ */
+const UUID_A = '123e4567-e89b-12d3-a456-426614174000';
+const UUID_B = '123e4567-e89b-12d3-a456-426614174001';
 
 describe('Validation Schemas', () => {
   describe('phoneSchema', () => {
@@ -53,276 +68,386 @@ describe('Validation Schemas', () => {
   describe('ownerLoginSchema', () => {
     it('should accept valid email and password', () => {
       const result = ownerLoginSchema.parse({
-        body: { email: 'owner@salao.com', password: '123456' },
+        email: 'owner@salao.com',
+        password: '123456',
       });
-      expect(result.body.email).toBe('owner@salao.com');
+      expect(result.email).toBe('owner@salao.com');
     });
 
     it('should reject invalid email', () => {
-      expect(() => ownerLoginSchema.parse({
-        body: { email: 'invalid-email', password: '123456' },
-      })).toThrow();
+      expect(() =>
+        ownerLoginSchema.parse({ email: 'invalid-email', password: '123456' })
+      ).toThrow();
     });
 
     it('should reject short password', () => {
-      expect(() => ownerLoginSchema.parse({
-        body: { email: 'owner@salao.com', password: '123' },
-      })).toThrow();
+      expect(() =>
+        ownerLoginSchema.parse({ email: 'owner@salao.com', password: '123' })
+      ).toThrow();
     });
   });
 
   describe('employeeLoginSchema', () => {
     it('should accept valid 6-digit access code', () => {
-      const result = employeeLoginSchema.parse({
-        body: { accessCode: '123456' },
-      });
-      expect(result.body.accessCode).toBe('123456');
+      const result = employeeLoginSchema.parse({ accessCode: '123456' });
+      expect(result.accessCode).toBe('123456');
     });
 
     it('should reject non-6-digit codes', () => {
-      expect(() => employeeLoginSchema.parse({ body: { accessCode: '12345' } })).toThrow();
-      expect(() => employeeLoginSchema.parse({ body: { accessCode: '1234567' } })).toThrow();
-      expect(() => employeeLoginSchema.parse({ body: { accessCode: 'abcdef' } })).toThrow();
+      expect(() => employeeLoginSchema.parse({ accessCode: '12345' })).toThrow();
+      expect(() => employeeLoginSchema.parse({ accessCode: '1234567' })).toThrow();
+      expect(() => employeeLoginSchema.parse({ accessCode: 'abcdef' })).toThrow();
     });
   });
 
   describe('clientRequestCodeSchema', () => {
     it('should accept valid phone', () => {
-      const result = clientRequestCodeSchema.parse({
-        body: { phone: '11999999999' },
-      });
-      expect(result.body.phone).toBe('11999999999');
+      const result = clientRequestCodeSchema.parse({ phone: '11999999999' });
+      expect(result.phone).toBe('11999999999');
+    });
+
+    it('should reject invalid phone', () => {
+      expect(() => clientRequestCodeSchema.parse({ phone: '123' })).toThrow();
     });
   });
 
   describe('clientVerifyCodeSchema', () => {
     it('should accept valid phone and 6-digit code', () => {
       const result = clientVerifyCodeSchema.parse({
-        body: { phone: '11999999999', code: '123456' },
+        phone: '11999999999',
+        code: '123456',
       });
-      expect(result.body.code).toBe('123456');
+      expect(result.code).toBe('123456');
     });
 
     it('should reject invalid code length', () => {
-      expect(() => clientVerifyCodeSchema.parse({
-        body: { phone: '11999999999', code: '12345' },
-      })).toThrow();
+      expect(() =>
+        clientVerifyCodeSchema.parse({ phone: '11999999999', code: '12345' })
+      ).toThrow();
     });
   });
 
   describe('createServiceSchema', () => {
     it('should accept valid service data', () => {
       const result = createServiceSchema.parse({
-        body: {
-          name: 'Corte Feminino',
-          description: 'Corte moderno',
-          durationMinutes: 60,
-          price: 80.00,
-        },
+        name: 'Corte Feminino',
+        description: 'Corte moderno',
+        durationMinutes: 60,
+        price: 80.0,
       });
-      expect(result.body.name).toBe('Corte Feminino');
+      expect(result.name).toBe('Corte Feminino');
     });
 
     it('should reject short name', () => {
-      expect(() => createServiceSchema.parse({
-        body: { name: 'C', durationMinutes: 30, price: 50 },
-      })).toThrow();
+      expect(() =>
+        createServiceSchema.parse({ name: 'C', durationMinutes: 30, price: 50 })
+      ).toThrow();
     });
 
     it('should reject invalid duration', () => {
-      expect(() => createServiceSchema.parse({
-        body: { name: 'Corte', durationMinutes: 10, price: 50 },
-      })).toThrow(); // mínimo 15 min
+      expect(() =>
+        createServiceSchema.parse({ name: 'Corte', durationMinutes: 10, price: 50 })
+      ).toThrow(); // mínimo 15 min
 
-      expect(() => createServiceSchema.parse({
-        body: { name: 'Corte', durationMinutes: 500, price: 50 },
-      })).toThrow(); // máximo 480 min
+      expect(() =>
+        createServiceSchema.parse({ name: 'Corte', durationMinutes: 500, price: 50 })
+      ).toThrow(); // máximo 480 min
     });
 
     it('should reject non-positive price', () => {
-      expect(() => createServiceSchema.parse({
-        body: { name: 'Corte', durationMinutes: 30, price: 0 },
-      })).toThrow();
+      expect(() =>
+        createServiceSchema.parse({ name: 'Corte', durationMinutes: 30, price: 0 })
+      ).toThrow();
 
-      expect(() => createServiceSchema.parse({
-        body: { name: 'Corte', durationMinutes: 30, price: -10 },
-      })).toThrow();
+      expect(() =>
+        createServiceSchema.parse({ name: 'Corte', durationMinutes: 30, price: -10 })
+      ).toThrow();
     });
   });
 
   describe('updateServiceSchema', () => {
     it('should accept partial updates', () => {
-      const result = updateServiceSchema.parse({
-        body: { name: 'Novo Nome' },
-        params: { id: '123e4567-e89b-12d3-a456-426614174000' },
-      });
-      expect(result.body.name).toBe('Novo Nome');
+      const result = updateServiceSchema.parse({ name: 'Novo Nome' });
+      expect(result.name).toBe('Novo Nome');
     });
 
-    it('should reject invalid UUID', () => {
-      expect(() => updateServiceSchema.parse({
-        body: { name: 'Teste' },
-        params: { id: 'invalid-uuid' },
-      })).toThrow();
+    it('should accept an empty patch (no-op)', () => {
+      expect(() => updateServiceSchema.parse({})).not.toThrow();
+    });
+
+    it('should reject invalid price on partial update', () => {
+      expect(() => updateServiceSchema.parse({ price: 0 })).toThrow();
     });
   });
 
   describe('createEmployeeSchema', () => {
     it('should accept valid employee data', () => {
       const result = createEmployeeSchema.parse({
-        body: {
-          name: 'Maria Silva',
-          phone: '11999999999',
-          specialties: ['Corte', 'Escova'],
-          serviceIds: ['123e4567-e89b-12d3-a456-426614174000'],
-        },
+        name: 'Maria Silva',
+        phone: '11999999999',
+        specialties: ['Corte', 'Escova'],
+        serviceIds: [UUID_A],
       });
-      expect(result.body.name).toBe('Maria Silva');
+      expect(result.name).toBe('Maria Silva');
     });
 
     it('should require at least one specialty', () => {
-      expect(() => createEmployeeSchema.parse({
-        body: {
+      expect(() =>
+        createEmployeeSchema.parse({
           name: 'Maria',
           phone: '11999999999',
           specialties: [],
-          serviceIds: ['123e4567-e89b-12d3-a456-426614174000'],
-        },
-      })).toThrow();
+          serviceIds: [UUID_A],
+        })
+      ).toThrow();
+    });
+
+    it('should reject non-uuid serviceIds', () => {
+      expect(() =>
+        createEmployeeSchema.parse({
+          name: 'Maria',
+          phone: '11999999999',
+          specialties: ['Corte'],
+          serviceIds: ['nao-e-uuid'],
+        })
+      ).toThrow();
+    });
+  });
+
+  describe('updateEmployeeSchema', () => {
+    it('should accept partial updates', () => {
+      const result = updateEmployeeSchema.parse({ isActive: false });
+      expect(result.isActive).toBe(false);
+    });
+
+    it('should allow an empty specialty list on update', () => {
+      // No update a lista pode ser esvaziada, o que no create não pode.
+      const result = updateEmployeeSchema.parse({ specialties: [] });
+      expect(result.specialties).toEqual([]);
+    });
+  });
+
+  describe('checkClientSchema', () => {
+    it('should accept valid phone', () => {
+      expect(checkClientSchema.parse({ phone: '31955554444' }).phone).toBe('31955554444');
+    });
+
+    it('should reject invalid phone', () => {
+      expect(() => checkClientSchema.parse({ phone: 'abc' })).toThrow();
     });
   });
 
   describe('getSlotsSchema', () => {
-    it('should accept valid query params', () => {
+    it('should accept valid params', () => {
       const result = getSlotsSchema.parse({
-        query: {
-          employeeId: '123e4567-e89b-12d3-a456-426614174000',
-          serviceId: '123e4567-e89b-12d3-a456-426614174001',
-          date: '2025-01-15',
-        },
+        employeeId: UUID_A,
+        serviceId: UUID_B,
+        date: '2025-01-15',
       });
-      expect(result.query.date).toBe('2025-01-15');
+      expect(result.date).toBe('2025-01-15');
     });
 
     it('should reject invalid date format', () => {
-      expect(() => getSlotsSchema.parse({
-        query: {
-          employeeId: '123e4567-e89b-12d3-a456-426614174000',
-          serviceId: '123e4567-e89b-12d3-a456-426614174001',
+      expect(() =>
+        getSlotsSchema.parse({
+          employeeId: UUID_A,
+          serviceId: UUID_B,
           date: '15/01/2025',
-        },
-      })).toThrow();
+        })
+      ).toThrow();
+    });
+
+    it('should reject non-uuid employeeId', () => {
+      expect(() =>
+        getSlotsSchema.parse({ employeeId: 'abc', serviceId: UUID_B, date: '2025-01-15' })
+      ).toThrow();
     });
   });
 
   describe('createBookingSchema', () => {
     it('should accept complete booking data for new client', () => {
       const result = createBookingSchema.parse({
-        body: {
-          serviceId: '123e4567-e89b-12d3-a456-426614174000',
-          employeeId: '123e4567-e89b-12d3-a456-426614174001',
-          startsAt: '2025-01-15T10:00:00-03:00',
-          client: {
-            phone: '11999999999',
-            fullName: 'João Silva',
-            birthDate: '1990-05-15',
-          },
+        serviceId: UUID_A,
+        employeeId: UUID_B,
+        startsAt: '2025-01-15T10:00:00-03:00',
+        client: {
+          phone: '11999999999',
+          fullName: 'João Silva',
+          birthDate: '1990-05-15',
         },
       });
-      expect(result.body.client.fullName).toBe('João Silva');
+      expect(result.client.fullName).toBe('João Silva');
     });
 
     it('should accept booking for existing client (only phone)', () => {
       const result = createBookingSchema.parse({
-        body: {
-          serviceId: '123e4567-e89b-12d3-a456-426614174000',
-          employeeId: '123e4567-e89b-12d3-a456-426614174001',
-          startsAt: '2025-01-15T10:00:00-03:00',
-          client: {
-            phone: '11999999999',
-          },
-        },
+        serviceId: UUID_A,
+        employeeId: UUID_B,
+        startsAt: '2025-01-15T10:00:00-03:00',
+        client: { phone: '11999999999' },
       });
-      expect(result.body.client.phone).toBe('11999999999');
-      expect(result.body.client.fullName).toBeUndefined();
+      expect(result.client.phone).toBe('11999999999');
+      expect(result.client.fullName).toBeUndefined();
     });
 
     it('should reject invalid ISO datetime', () => {
-      expect(() => createBookingSchema.parse({
-        body: {
-          serviceId: '123e4567-e89b-12d3-a456-426614174000',
-          employeeId: '123e4567-e89b-12d3-a456-426614174001',
+      expect(() =>
+        createBookingSchema.parse({
+          serviceId: UUID_A,
+          employeeId: UUID_B,
           startsAt: '2025-01-15 10:00:00', // sem timezone
           client: { phone: '11999999999' },
-        },
-      })).toThrow();
+        })
+      ).toThrow();
+    });
+  });
+
+  describe('cancelBookingSchema', () => {
+    it('should accept an empty cancellation', () => {
+      expect(() => cancelBookingSchema.parse({})).not.toThrow();
+    });
+
+    it('should reject a reason longer than 200 chars', () => {
+      expect(() => cancelBookingSchema.parse({ reason: 'x'.repeat(201) })).toThrow();
     });
   });
 
   describe('updateAppointmentStatusSchema', () => {
-    it('should accept valid status transitions', () => {
-      const validStatuses = ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'];
+    it('should accept valid statuses', () => {
+      const validStatuses = ['SCHEDULED', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const;
       for (const status of validStatuses) {
-        const result = updateAppointmentStatusSchema.parse({
-          params: { id: '123e4567-e89b-12d3-a456-426614174000' },
-          body: { status },
-        });
-        expect(result.body.status).toBe(status);
+        const result = updateAppointmentStatusSchema.parse({ status });
+        expect(result.status).toBe(status);
       }
     });
 
     it('should reject invalid status', () => {
-      expect(() => updateAppointmentStatusSchema.parse({
-        params: { id: '123e4567-e89b-12d3-a456-426614174000' },
-        body: { status: 'INVALID' },
-      })).toThrow();
+      expect(() => updateAppointmentStatusSchema.parse({ status: 'INVALID' })).toThrow();
+    });
+  });
+
+  describe('listAppointmentsSchema', () => {
+    it('should apply pagination defaults', () => {
+      const result = listAppointmentsSchema.parse({});
+      expect(result.page).toBe(1);
+      expect(result.limit).toBe(20);
+    });
+
+    it('should coerce numeric strings coming from the query string', () => {
+      const result = listAppointmentsSchema.parse({ page: '3', limit: '50' });
+      expect(result.page).toBe(3);
+      expect(result.limit).toBe(50);
+    });
+
+    it('should reject limit above 100', () => {
+      expect(() => listAppointmentsSchema.parse({ limit: '500' })).toThrow();
     });
   });
 
   describe('updateSettingsSchema', () => {
     it('should accept valid business hours', () => {
       const result = updateSettingsSchema.parse({
-        body: {
-          name: 'Meu Salão',
-          businessHours: {
-            0: null,
-            1: { open: '09:00', close: '19:00' },
-            2: { open: '09:00', close: '19:00' },
-            3: { open: '09:00', close: '19:00' },
-            4: { open: '09:00', close: '19:00' },
-            5: { open: '09:00', close: '19:00' },
-            6: { open: '09:00', close: '17:00' },
-          },
+        name: 'Meu Salão',
+        businessHours: {
+          0: null,
+          1: { open: '09:00', close: '19:00' },
+          2: { open: '09:00', close: '19:00' },
+          3: { open: '09:00', close: '19:00' },
+          4: { open: '09:00', close: '19:00' },
+          5: { open: '09:00', close: '19:00' },
+          6: { open: '09:00', close: '17:00' },
         },
       });
-      expect(result.body.businessHours?.[1]?.open).toBe('09:00');
+      expect(result.businessHours?.[1]?.open).toBe('09:00');
     });
 
     it('should accept whatsapp config', () => {
       const result = updateSettingsSchema.parse({
-        body: {
+        whatsappApiConfig: {
+          provider: 'zapi',
+          instanceId: '12345',
+          token: 'abcdef',
+          apiUrl: 'https://api.z-api.io',
+        },
+      });
+      expect(result.whatsappApiConfig?.provider).toBe('zapi');
+    });
+
+    it('should reject an unknown whatsapp provider', () => {
+      expect(() =>
+        updateSettingsSchema.parse({
           whatsappApiConfig: {
-            provider: 'zapi',
+            provider: 'telegram',
             instanceId: '12345',
             token: 'abcdef',
             apiUrl: 'https://api.z-api.io',
           },
-        },
+        })
+      ).toThrow();
+    });
+
+    it('should bound bufferMinutes to 0..60', () => {
+      expect(() => updateSettingsSchema.parse({ bufferMinutes: 61 })).toThrow();
+      expect(() => updateSettingsSchema.parse({ bufferMinutes: -1 })).toThrow();
+      expect(() => updateSettingsSchema.parse({ bufferMinutes: 15 })).not.toThrow();
+    });
+  });
+
+  describe('financialQuerySchema', () => {
+    it('should default to month', () => {
+      expect(financialQuerySchema.parse({}).period).toBe('month');
+    });
+
+    it('should accept day/month/year', () => {
+      expect(financialQuerySchema.parse({ period: 'day' }).period).toBe('day');
+      expect(financialQuerySchema.parse({ period: 'year' }).period).toBe('year');
+    });
+
+    it('should reject unknown period', () => {
+      expect(() => financialQuerySchema.parse({ period: 'week' })).toThrow();
+    });
+  });
+
+  describe('employeeSalonInfoSchema', () => {
+    it('should accept identity fields', () => {
+      const result = employeeSalonInfoSchema.parse({
+        name: 'Salão Beleza',
+        phone: '31971192468',
+        email: 'contato@salon.com.br',
+        address: 'Rua das Acácias, 100',
+        description: 'Um texto curto.',
       });
-      expect(result.body.whatsappApiConfig?.provider).toBe('zapi');
+      expect(result.name).toBe('Salão Beleza');
+    });
+
+    it('should strip operational fields the employee must not change', () => {
+      // O schema não declara bufferMinutes/slotInterval/businessHours, então
+      // o zod os descarta. É isso que impede o funcionário de mexer na
+      // operação do salão — o teste trava esse contrato.
+      const result = employeeSalonInfoSchema.parse({
+        name: 'Salão Beleza',
+        bufferMinutes: 99,
+        slotInterval: 120,
+        cancellationHours: 48,
+      });
+      expect(result).not.toHaveProperty('bufferMinutes');
+      expect(result).not.toHaveProperty('slotInterval');
+      expect(result).not.toHaveProperty('cancellationHours');
+    });
+
+    it('should require the salon name', () => {
+      expect(() => employeeSalonInfoSchema.parse({ name: '' })).toThrow();
     });
   });
 
   describe('uuidParamSchema', () => {
     it('should accept valid UUID', () => {
-      const result = uuidParamSchema.parse({
-        params: { id: '123e4567-e89b-12d3-a456-426614174000' },
-      });
-      expect(result.params.id).toBe('123e4567-e89b-12d3-a456-426614174000');
+      const result = uuidParamSchema.parse({ id: UUID_A });
+      expect(result.id).toBe(UUID_A);
     });
 
     it('should reject invalid UUID', () => {
-      expect(() => uuidParamSchema.parse({ params: { id: 'not-a-uuid' } })).toThrow();
+      expect(() => uuidParamSchema.parse({ id: 'not-a-uuid' })).toThrow();
     });
   });
 });

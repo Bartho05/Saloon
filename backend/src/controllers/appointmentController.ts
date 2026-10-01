@@ -258,7 +258,7 @@ export async function getAppointmentById(req: AuthRequest, res: Response): Promi
     include: {
       client: { select: { id: true, fullName: true, phone: true, birthDate: true } },
       service: { select: { id: true, name: true, durationMinutes: true, price: true } },
-      employee: { select: { id: true, name: true, phone: true } },
+      employee: { select: { id: true, name: true, phone: true, photoUrl: true } },
     },
   });
 

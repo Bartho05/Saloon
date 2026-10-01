@@ -10,6 +10,19 @@ import {
   DEFAULT_BLOCKED_CONFIG,
 } from '@utils/holidays';
 
+/**
+ * Monta uma data no fuso LOCAL a partir de 'YYYY-MM-DD'.
+ *
+ * `d('2025-01-01')` é interpretado como meia-noite UTC. No Brasil
+ * (UTC-3) isso vira 2024-12-31 21:00 local, e como formatDateKey lê as
+ * partes locais, o dia "vira" e o teste falha por causa do fuso — não da
+ * lógica de feriados. Montar local evita essa armadilha.
+ */
+const d = (iso: string): Date => {
+  const [year, month, day] = iso.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
 describe('Holidays Utils', () => {
   describe('formatDateKey', () => {
     it('should format date as YYYY-MM-DD', () => {
@@ -34,67 +47,67 @@ describe('Holidays Utils', () => {
 
   describe('isNationalHoliday', () => {
     it('should return true for fixed national holidays', () => {
-      expect(isNationalHoliday(new Date('2025-01-01'))).toBe(true); // Ano Novo
-      expect(isNationalHoliday(new Date('2025-04-21'))).toBe(true); // Tiradentes
-      expect(isNationalHoliday(new Date('2025-05-01'))).toBe(true); // Dia do Trabalhador
-      expect(isNationalHoliday(new Date('2025-09-07'))).toBe(true); // Independência
-      expect(isNationalHoliday(new Date('2025-10-12'))).toBe(true); // Padroeira
-      expect(isNationalHoliday(new Date('2025-11-02'))).toBe(true); // Finados
-      expect(isNationalHoliday(new Date('2025-11-15'))).toBe(true); // Proclamação
-      expect(isNationalHoliday(new Date('2025-12-25'))).toBe(true); // Natal
+      expect(isNationalHoliday(d('2025-01-01'))).toBe(true); // Ano Novo
+      expect(isNationalHoliday(d('2025-04-21'))).toBe(true); // Tiradentes
+      expect(isNationalHoliday(d('2025-05-01'))).toBe(true); // Dia do Trabalhador
+      expect(isNationalHoliday(d('2025-09-07'))).toBe(true); // Independência
+      expect(isNationalHoliday(d('2025-10-12'))).toBe(true); // Padroeira
+      expect(isNationalHoliday(d('2025-11-02'))).toBe(true); // Finados
+      expect(isNationalHoliday(d('2025-11-15'))).toBe(true); // Proclamação
+      expect(isNationalHoliday(d('2025-12-25'))).toBe(true); // Natal
     });
 
     it('should return true for variable holidays (Carnaval, Páscoa)', () => {
-      expect(isNationalHoliday(new Date('2025-03-03'))).toBe(true); // Carnaval 2025
-      expect(isNationalHoliday(new Date('2025-03-04'))).toBe(true); // Carnaval 2025
-      expect(isNationalHoliday(new Date('2025-04-18'))).toBe(true); // Sexta Santa 2025
-      expect(isNationalHoliday(new Date('2025-06-19'))).toBe(true); // Corpus Christi 2025
+      expect(isNationalHoliday(d('2025-03-03'))).toBe(true); // Carnaval 2025
+      expect(isNationalHoliday(d('2025-03-04'))).toBe(true); // Carnaval 2025
+      expect(isNationalHoliday(d('2025-04-18'))).toBe(true); // Sexta Santa 2025
+      expect(isNationalHoliday(d('2025-06-19'))).toBe(true); // Corpus Christi 2025
     });
 
     it('should return false for regular days', () => {
-      expect(isNationalHoliday(new Date('2025-01-15'))).toBe(false);
-      expect(isNationalHoliday(new Date('2025-06-15'))).toBe(false);
+      expect(isNationalHoliday(d('2025-01-15'))).toBe(false);
+      expect(isNationalHoliday(d('2025-06-15'))).toBe(false);
     });
   });
 
   describe('isOptionalHoliday', () => {
     it('should return true for optional holidays', () => {
-      expect(isOptionalHoliday(new Date('2025-07-09'))).toBe(true); // Rev. Constitucionalista SP
-      expect(isOptionalHoliday(new Date('2025-11-20'))).toBe(true); // Consciência Negra
+      expect(isOptionalHoliday(d('2025-07-09'))).toBe(true); // Rev. Constitucionalista SP
+      expect(isOptionalHoliday(d('2025-11-20'))).toBe(true); // Consciência Negra
     });
 
     it('should return false for non-optional days', () => {
-      expect(isOptionalHoliday(new Date('2025-01-15'))).toBe(false);
+      expect(isOptionalHoliday(d('2025-01-15'))).toBe(false);
     });
   });
 
   describe('getHolidayName', () => {
     it('should return holiday name for known holidays', () => {
-      expect(getHolidayName(new Date('2025-01-01'))).toBe('Confraternização Universal');
-      expect(getHolidayName(new Date('2025-04-21'))).toBe('Tiradentes');
-      expect(getHolidayName(new Date('2025-12-25'))).toBe('Natal');
+      expect(getHolidayName(d('2025-01-01'))).toBe('Confraternização Universal');
+      expect(getHolidayName(d('2025-04-21'))).toBe('Tiradentes');
+      expect(getHolidayName(d('2025-12-25'))).toBe('Natal');
     });
 
     it('should return variable holiday names', () => {
-      expect(getHolidayName(new Date('2025-03-03'))).toBe('Carnaval (Segunda)');
-      expect(getHolidayName(new Date('2025-04-18'))).toBe('Sexta-feira Santa');
+      expect(getHolidayName(d('2025-03-03'))).toBe('Carnaval (Segunda)');
+      expect(getHolidayName(d('2025-04-18'))).toBe('Sexta-feira Santa');
     });
 
     it('should return null for non-holidays', () => {
-      expect(getHolidayName(new Date('2025-01-15'))).toBeNull();
+      expect(getHolidayName(d('2025-01-15'))).toBeNull();
     });
   });
 
   describe('isDateBlocked', () => {
     it('should block weekly closures (Sunday by default)', () => {
-      const sunday = new Date('2025-01-19'); // Domingo
+      const sunday = d('2025-01-19'); // Domingo
       const result = isDateBlocked(sunday, DEFAULT_BLOCKED_CONFIG);
       expect(result.blocked).toBe(true);
       expect(result.reason).toBe('Dia de fechamento semanal');
     });
 
     it('should block national holidays when enabled', () => {
-      const holiday = new Date('2025-01-01'); // Ano Novo
+      const holiday = d('2025-01-01'); // Ano Novo
       const result = isDateBlocked(holiday, DEFAULT_BLOCKED_CONFIG);
       expect(result.blocked).toBe(true);
       expect(result.reason).toBe('Feriado nacional');
@@ -102,14 +115,14 @@ describe('Holidays Utils', () => {
 
     it('should not block national holidays when disabled', () => {
       const config = { ...DEFAULT_BLOCKED_CONFIG, nationalHolidays: false };
-      const holiday = new Date('2025-01-01');
+      const holiday = d('2025-01-01');
       const result = isDateBlocked(holiday, config);
       expect(result.blocked).toBe(false);
     });
 
     it('should block optional holidays when enabled', () => {
       const config = { ...DEFAULT_BLOCKED_CONFIG, optionalHolidays: true };
-      const holiday = new Date('2025-11-20'); // Consciência Negra
+      const holiday = d('2025-11-20'); // Consciência Negra
       const result = isDateBlocked(holiday, config);
       expect(result.blocked).toBe(true);
       expect(result.reason).toBe('Feriado opcional');
@@ -117,7 +130,7 @@ describe('Holidays Utils', () => {
 
     it('should block custom dates', () => {
       const config = { ...DEFAULT_BLOCKED_CONFIG, customBlockedDates: ['2025-01-15'] };
-      const date = new Date('2025-01-15');
+      const date = d('2025-01-15');
       const result = isDateBlocked(date, config);
       expect(result.blocked).toBe(true);
       expect(result.reason).toBe('Data bloqueada pelo salão');
@@ -128,7 +141,7 @@ describe('Holidays Utils', () => {
         ...DEFAULT_BLOCKED_CONFIG,
         employeeVacations: { 'emp1': ['2025-01-15'] },
       };
-      const date = new Date('2025-01-15');
+      const date = d('2025-01-15');
       const result = isDateBlocked(date, config, 'emp1');
       expect(result.blocked).toBe(true);
       expect(result.reason).toBe('Profissional de férias');
@@ -139,7 +152,7 @@ describe('Holidays Utils', () => {
         ...DEFAULT_BLOCKED_CONFIG,
         employeeVacations: { 'emp1': ['2025-01-15'] },
       };
-      const date = new Date('2025-01-15');
+      const date = d('2025-01-15');
       const result = isDateBlocked(date, config, 'emp2');
       expect(result.blocked).toBe(false);
     });

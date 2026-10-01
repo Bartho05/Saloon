@@ -341,15 +341,26 @@ export async function cancelBooking(appointmentId: string, clientId: string, rea
   });
 
   if (!appointment) {
-    throw new Error('Agendamento não encontrado');
+    throw new AppError('Agendamento não encontrado', 404, 'APPOINTMENT_NOT_FOUND');
   }
 
   if (appointment.clientId !== clientId) {
-    throw new Error('Não autorizado a cancelar este agendamento');
+    throw new AppError(
+      'Não autorizado a cancelar este agendamento',
+      403,
+      'FORBIDDEN'
+    );
   }
 
   if (appointment.status !== 'SCHEDULED') {
-    throw new Error('Apenas agendamentos agendados podem ser cancelados');
+    // AppError e não Error: um Error cru cai no handler genérico e vira 500,
+    // fazendo parecer falha do servidor o que é uma recusa legítima (o
+    // cliente tentou cancelar algo já concluído).
+    throw new AppError(
+      'Apenas agendamentos agendados podem ser cancelados',
+      400,
+      'APPOINTMENT_NOT_CANCELLABLE'
+    );
   }
 
   await prisma.appointment.update({
@@ -376,7 +387,7 @@ export async function updateAppointmentStatus(
   });
 
   if (!appointment) {
-    throw new Error('Agendamento não encontrado');
+    throw new AppError('Agendamento não encontrado', 404, 'APPOINTMENT_NOT_FOUND');
   }
 
   // TODO: Verificar permissão (dono pode todos, funcionário só seus)

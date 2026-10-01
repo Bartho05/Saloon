@@ -11,6 +11,7 @@ import { AppError } from '@middlewares/errorHandler';
 import { sendEmployeeAccessCode } from '@services/whatsappService';
 import { invalidateWhatsAppCache } from '@services/whatsappService';
 import { getFinancialSummary } from '@services/financialService';
+import { persistImage, removeImage } from '@services/uploadService';
 
 function generateAccessCode(): string {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -31,6 +32,7 @@ export async function getEmployees(req: AuthRequest, res: Response): Promise<voi
       specialties: true,
       accessCode: true,
       isActive: true,
+      photoUrl: true,
       createdAt: true,
       _count: {
         select: { appointments: true },
@@ -68,6 +70,8 @@ export async function getActiveEmployees(req: AuthRequest, res: Response): Promi
       id: true,
       name: true,
       specialties: true,
+      // o cliente vê a foto de quem vai atendê-lo
+      photoUrl: true,
       _count: {
         select: { appointments: true },
       },
@@ -278,6 +282,164 @@ export async function getEmployeeProfile(req: AuthRequest, res: Response): Promi
       specialties: true,
       accessCode: true,
       isActive: true,
+      photoUrl: true,
+      createdAt: true,
+    },
+  });
+
+  res.json({ employee });
+}
+
+/**
+ * PATCH /employee/photo
+ * O próprio funcionário envia a foto do rosto.
+ */
+export async function uploadMyPhoto(req: AuthRequest, res: Response): Promise<void> {
+  const entity = req.userEntity;
+
+  if (!entity || !('role' in entity)) {
+    throw new AppError('Acesso restrito a funcionários', 403, 'FORBIDDEN');
+  }
+
+  const file = req.file;
+  if (!file) {
+    throw new AppError('Envie um arquivo de imagem', 400, 'FILE_REQUIRED');
+  }
+
+  const current = await prisma.user.findUnique({
+    where: { id: entity.id },
+    select: { photoUrl: true },
+  });
+
+  const photoUrl = persistImage(file.path, 'employees', entity.id);
+
+  // remove a anterior só depois que a nova está no disco
+  removeImage(current?.photoUrl);
+
+  const employee = await prisma.user.update({
+    where: { id: entity.id },
+    data: { photoUrl },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      specialties: true,
+      accessCode: true,
+      isActive: true,
+      photoUrl: true,
+      createdAt: true,
+    },
+  });
+
+  res.json({ employee });
+}
+
+/**
+ * DELETE /employee/photo
+ */
+export async function removeMyPhoto(req: AuthRequest, res: Response): Promise<void> {
+  const entity = req.userEntity;
+
+  if (!entity || !('role' in entity)) {
+    throw new AppError('Acesso restrito a funcionários', 403, 'FORBIDDEN');
+  }
+
+  const current = await prisma.user.findUnique({
+    where: { id: entity.id },
+    select: { photoUrl: true },
+  });
+
+  removeImage(current?.photoUrl);
+
+  const employee = await prisma.user.update({
+    where: { id: entity.id },
+    data: { photoUrl: null },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      specialties: true,
+      accessCode: true,
+      isActive: true,
+      photoUrl: true,
+      createdAt: true,
+    },
+  });
+
+  res.json({ employee });
+}
+
+/**
+ * PATCH /owner/employees/:id/photo
+ * O dono envia a foto de um funcionário.
+ */
+export async function uploadEmployeePhoto(req: AuthRequest, res: Response): Promise<void> {
+  const file = req.file;
+  if (!file) {
+    throw new AppError('Envie um arquivo de imagem', 400, 'FILE_REQUIRED');
+  }
+
+  const { id } = req.params;
+  const current = await prisma.user.findUnique({
+    where: { id },
+    select: { photoUrl: true },
+  });
+
+  if (!current) {
+    removeImage(persistImage(file.path, 'employees', id));
+    throw new AppError('Funcionário não encontrado', 404, 'EMPLOYEE_NOT_FOUND');
+  }
+
+  const photoUrl = persistImage(file.path, 'employees', id);
+  removeImage(current.photoUrl);
+
+  const employee = await prisma.user.update({
+    where: { id },
+    data: { photoUrl },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      specialties: true,
+      accessCode: true,
+      isActive: true,
+      photoUrl: true,
+      createdAt: true,
+    },
+  });
+
+  res.json({ employee });
+}
+
+/**
+ * DELETE /owner/employees/:id/photo
+ * O dono remove a foto de um funcionário (volta para a inicial).
+ */
+export async function removeEmployeePhoto(req: AuthRequest, res: Response): Promise<void> {
+  const { id } = req.params;
+
+  const current = await prisma.user.findUnique({
+    where: { id },
+    select: { photoUrl: true },
+  });
+
+  if (!current) {
+    throw new AppError('Funcionário não encontrado', 404, 'EMPLOYEE_NOT_FOUND');
+  }
+
+  removeImage(current.photoUrl);
+
+  const employee = await prisma.user.update({
+    where: { id },
+    data: { photoUrl: null },
+    select: {
+      id: true,
+      name: true,
+      phone: true,
+      specialties: true,
+      accessCode: true,
+      isActive: true,
+      photoUrl: true,
       createdAt: true,
     },
   });

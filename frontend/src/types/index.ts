@@ -14,6 +14,7 @@ export interface Employee {
   specialties: string[];
   accessCode: string;
   isActive: boolean;
+  photoUrl?: string | null;
   services?: Service[];
 }
 
@@ -81,9 +82,12 @@ export interface SalonSettings {
   phone?: string;
   email?: string;
   address?: string;
+  logoUrl?: string | null;
+  description?: string | null;
   businessHours: Record<string, { open: string; close: string } | null>;
   timezone: string;
   birthdayMessage?: string;
+  whatsappConfigured?: boolean;
   whatsappApiConfig?: {
     provider: 'zapi' | 'evolution' | 'meta';
     instanceId: string;

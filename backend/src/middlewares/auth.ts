@@ -65,7 +65,9 @@ export async function authMiddleware(
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Token de acesso não fornecido' });
+    // O `code` distingue "token ausente" de "token inválido": sem ele o front
+    // não sabe se deve tentar um refresh silencioso ou mandar o usuário ao login.
+    res.status(401).json({ error: 'Token de acesso não fornecido', code: 'NOT_AUTHENTICATED' });
     return;
   }
 
@@ -73,7 +75,10 @@ export async function authMiddleware(
   const payload = verifyAccessToken(token);
 
   if (!payload) {
-    res.status(401).json({ error: 'Token inválido ou expirado' });
+    res.status(401).json({
+      error: 'Token inválido ou expirado',
+      code: 'INVALID_ACCESS_TOKEN',
+    });
     return;
   }
 

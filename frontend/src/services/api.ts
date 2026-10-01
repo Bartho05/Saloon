@@ -297,7 +297,6 @@ export const employeeApi = {
   getFinancials: (period: 'day' | 'month' | 'year') =>
     request<{ financial: FinancialSummary }>(`/employee/financial?period=${period}`),
 };
-
 // Financeiro
 export interface FinancialSummary {
   period: 'day' | 'month' | 'year';
@@ -333,6 +332,63 @@ export interface OwnerFinancialOverview {
 export const financialApi = {
   getOwnerOverview: (period: 'day' | 'month' | 'year') =>
     request<{ financial: OwnerFinancialOverview }>(`/owner/financial?period=${period}`),
+};
+
+/**
+ * Upload de imagem.
+ *
+ * Vai como FormData para não forçar o header Content-Type: com
+ * `Content-Type: application/json` o browser não manda o boundary e o
+ * multer não consegue ler o arquivo.
+ */
+async function uploadImage(endpoint: string, file: File, method = 'POST'): Promise<void> {
+  const token = localStorage.getItem('accessToken');
+  const form = new FormData();
+  form.append('photo', file);
+
+  let response = await fetch(`${API_BASE}${endpoint}`, {
+    method,
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: form,
+  });
+
+  if (response.status === 401) {
+    const refreshed = await refreshSession();
+    if (!refreshed) throw new ApiError(401, 'Sessão expirada');
+    const newToken = localStorage.getItem('accessToken');
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      method,
+      headers: newToken ? { Authorization: `Bearer ${newToken}` } : undefined,
+      body: form,
+    });
+  }
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new ApiError(response.status, data.error || 'Falha no envio da imagem', data);
+  }
+}
+
+export const uploadApi = {
+  salonLogo: (file: File) => uploadImage('/owner/settings/logo', file),
+  removeSalonLogo: () =>
+    request<{ settings: SalonSettings }>('/owner/settings/logo', { method: 'DELETE' }),
+  employeeSalonLogo: (file: File) => uploadImage('/employee/salon/logo', file),
+  myPhoto: (file: File) => uploadImage('/employee/photo', file, 'PATCH'),
+  removeMyPhoto: () =>
+    request<{ employee: Employee }>('/employee/photo', { method: 'DELETE' }),
+  employeePhoto: (id: string, file: File) => uploadImage(`/owner/employees/${id}/photo`, file, 'PATCH'),
+  removeEmployeePhoto: (id: string) =>
+    request<{ employee: Employee }>(`/owner/employees/${id}/photo`, { method: 'DELETE' }),
+};
+
+export const salonApi = {
+  get: () => request<{ settings: SalonSettings }>('/employee/salon'),
+  update: (data: Partial<SalonSettings>) =>
+    request<{ settings: SalonSettings }>('/employee/salon', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
 };
 
 export { ApiError };

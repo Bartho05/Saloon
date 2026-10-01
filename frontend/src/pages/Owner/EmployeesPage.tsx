@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { ownerApi, servicesApi } from '@services/api';
+import { useState, useEffect, useRef } from 'react';
+import { ownerApi, servicesApi, uploadApi } from '@services/api';
 import { useToast } from '@contexts/ToastContext';
 import { formatPhone } from '@utils/validation';
 import type { Employee, Service } from '@types';
@@ -12,6 +12,8 @@ import {
   RefreshIcon,
   TrashIcon,
   PlusIcon,
+  UploadIcon,
+  CloseIcon,
 } from '@components/icons';
 
 export function OwnerEmployeesPage() {
@@ -28,6 +30,55 @@ export function OwnerEmployeesPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
+  const [uploadingPhotoFor, setUploadingPhotoFor] = useState<string | null>(null);
+  // input de arquivo escondido, compartilhado por todas as linhas
+  const photoRef = useRef<HTMLInputElement>(null);
+  const photoTargetId = useRef<string | null>(null);
+
+  const openPhotoPicker = (id: string) => {
+    photoTargetId.current = id;
+    photoRef.current?.click();
+  };
+
+  const handlePhotoFile = async (file: File | undefined | null) => {
+    const id = photoTargetId.current;
+    if (!file || !id) return;
+
+    if (file.size > 4 * 1024 * 1024) {
+      showToast({ type: 'error', title: 'Arquivo muito grande', message: 'O limite é 4MB.' });
+      return;
+    }
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      showToast({ type: 'error', title: 'Formato inválido', message: 'Use JPEG, PNG ou WEBP.' });
+      return;
+    }
+
+    setUploadingPhotoFor(id);
+    try {
+      await uploadApi.employeePhoto(id, file);
+      showToast({ type: 'success', title: 'Foto atualizada' });
+      loadData();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Falha no envio', message: err.message });
+    } finally {
+      setUploadingPhotoFor(null);
+      photoTargetId.current = null;
+      if (photoRef.current) photoRef.current.value = '';
+    }
+  };
+
+  const handleRemovePhoto = async (employee: Employee) => {
+    setUploadingPhotoFor(employee.id);
+    try {
+      await uploadApi.removeEmployeePhoto(employee.id);
+      showToast({ type: 'success', title: 'Foto removida' });
+      loadData();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Erro', message: err.message });
+    } finally {
+      setUploadingPhotoFor(null);
+    }
+  };
   const [confirmDelete, setConfirmDelete] = useState<Employee | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -163,17 +214,25 @@ export function OwnerEmployeesPage() {
                 key={employee.id}
                 className="group px-5 md:px-6 py-5 flex items-center gap-4 border-b border-brand-gray last:border-b-0 hover:bg-brand-grayLight transition-colors duration-fast"
               >
-                {/* Avatar */}
-                <div
-                  className={`w-11 h-11 flex-shrink-0 flex items-center justify-center font-display font-bold text-body-lg border ${
-                    employee.isActive
-                      ? 'bg-brand-black text-brand-white border-brand-black'
-                      : 'bg-transparent text-brand-grayMid border-brand-gray'
-                  }`}
-                  aria-hidden="true"
-                >
-                  {employee.name.charAt(0).toUpperCase()}
-                </div>
+                {/* Avatar / foto */}
+                {employee.photoUrl ? (
+                  <img
+                    src={employee.photoUrl}
+                    alt={`Foto de ${employee.name}`}
+                    className="w-11 h-11 object-cover flex-shrink-0 border border-brand-gray"
+                  />
+                ) : (
+                  <div
+                    className={`w-11 h-11 flex-shrink-0 flex items-center justify-center font-display font-bold text-body-lg border ${
+                      employee.isActive
+                        ? 'bg-brand-black text-brand-white border-brand-black'
+                        : 'bg-transparent text-brand-grayMid border-brand-gray'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    {employee.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
 
                 {/* Info */}
                 <div className="flex-1 min-w-0">
@@ -213,6 +272,23 @@ export function OwnerEmployeesPage() {
                 {/* Ações */}
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <IconAction
+                    label={employee.photoUrl ? `Trocar foto de ${employee.name}` : `Enviar foto de ${employee.name}`}
+                    onClick={() => openPhotoPicker(employee.id)}
+                    disabled={uploadingPhotoFor === employee.id}
+                    spinning={uploadingPhotoFor === employee.id}
+                  >
+                    <UploadIcon className="w-4 h-4" />
+                  </IconAction>
+                  {employee.photoUrl && (
+                    <IconAction
+                      label={`Remover foto de ${employee.name}`}
+                      onClick={() => handleRemovePhoto(employee)}
+                      disabled={uploadingPhotoFor === employee.id}
+                    >
+                      <CloseIcon className="w-4 h-4" />
+                    </IconAction>
+                  )}
+                  <IconAction
                     label={`Editar ${employee.name}`}
                     onClick={() => handleEdit(employee)}
                   >
@@ -239,6 +315,16 @@ export function OwnerEmployeesPage() {
           </ul>
         </Card>
       )}
+
+      {/* Input de foto compartilhado por todas as linhas */}
+      <input
+        ref={photoRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="sr-only"
+        onChange={(e) => void handlePhotoFile(e.target.files?.[0])}
+        aria-label="Selecionar foto do funcionário"
+      />
 
       {/* Formulário */}
       <Modal

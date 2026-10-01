@@ -168,8 +168,30 @@ export function ClientAppointmentsPage() {
                     </div>
                     <p className="text-body-sm text-brand-grayMid mt-0.5">
                       {formatDateTime(apt.startsAt)}
-                      {apt.employee ? ` · ${apt.employee.name}` : ''}
                     </p>
+
+                    {/* Com quem o cliente vai fazer o atendimento */}
+                    {apt.employee && (
+                      <div className="flex items-center gap-2 mt-3">
+                        <span className="w-7 h-7 flex-shrink-0 bg-brand-grayLight border border-brand-gray overflow-hidden flex items-center justify-center">
+                          {apt.employee.photoUrl ? (
+                            <img
+                              src={apt.employee.photoUrl}
+                              alt=""
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="font-display font-bold text-caption text-brand-grayMid">
+                              {apt.employee.name.charAt(0).toUpperCase()}
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-caption text-brand-grayMid truncate">
+                          {apt.employee.name}
+                        </span>
+                      </div>
+                    )}
+
                     {apt.notes && (
                       <p className="text-caption text-brand-grayMid mt-1.5 border-l-2 border-brand-gray pl-2">
                         {apt.notes}

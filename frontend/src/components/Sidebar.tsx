@@ -10,10 +10,11 @@ import {
   UserIcon,
   LogoutIcon,
   WalletIcon,
+  MapPinIcon,
 } from '@components/icons';
 
 interface SidebarProps {
-  variant: 'owner' | 'employee';
+  variant: 'owner' | 'employee' | 'client';
   onNavigate?: () => void;
 }
 
@@ -30,12 +31,25 @@ const employeeMenu = [
   { label: 'Minha Agenda', href: '/funcionario/agenda', icon: CalendarIcon },
   { label: 'Agendamentos', href: '/funcionario/agendamentos', icon: ListIcon },
   { label: 'Meu Faturamento', href: '/funcionario/financeiro', icon: WalletIcon },
+  { label: 'Salão', href: '/funcionario/salao', icon: MapPinIcon },
   { label: 'Perfil', href: '/funcionario/perfil', icon: UserIcon },
 ];
 
+const clientMenu = [
+  { label: 'Meus Agendamentos', href: '/meus-agendamentos', icon: CalendarIcon },
+  { label: 'Agendar', href: '/agendar', icon: ScissorsIcon },
+  { label: 'Meu Perfil', href: '/meu-perfil', icon: UserIcon },
+];
+
+const variantLabels: Record<SidebarProps['variant'], string> = {
+  owner: 'Proprietário',
+  employee: 'Funcionário',
+  client: 'Cliente',
+};
+
 export function Sidebar({ variant, onNavigate }: SidebarProps) {
   const { user, logout } = useAuth();
-  const menu = variant === 'owner' ? ownerMenu : employeeMenu;
+  const menu = variant === 'owner' ? ownerMenu : variant === 'client' ? clientMenu : employeeMenu;
   const displayName =
     user && 'name' in user ? user.name : user && 'fullName' in user ? user.fullName : 'Usuário';
   const initial = displayName.charAt(0).toUpperCase();
@@ -66,7 +80,7 @@ export function Sidebar({ variant, onNavigate }: SidebarProps) {
           </div>
           <div className="min-w-0">
             <p className="font-display font-medium text-body-sm truncate">{displayName}</p>
-            <p className="text-caption text-brand-grayMid">{variant === 'owner' ? 'Proprietário' : 'Funcionário'}</p>
+            <p className="text-caption text-brand-grayMid">{variantLabels[variant]}</p>
           </div>
         </div>
       </div>

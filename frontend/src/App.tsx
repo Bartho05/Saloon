@@ -7,6 +7,7 @@ import { LandingPage } from '@pages/Public/LandingPage';
 import { AgendarPage } from '@pages/Public/AgendarPage';
 import { LoginPage } from '@pages/Public/LoginPage';
 import { ClientAppointmentsPage } from '@pages/Public/ClientAppointmentsPage';
+import { ClientProfilePage } from '@pages/Public/ClientProfilePage';
 import { OwnerDashboardPage } from '@pages/Owner/DashboardPage';
 import { OwnerServicesPage } from '@pages/Owner/ServicesPage';
 import { OwnerEmployeesPage } from '@pages/Owner/EmployeesPage';
@@ -16,6 +17,7 @@ import { OwnerSettingsPage } from '@pages/Owner/SettingsPage';
 import { EmployeeSchedulePage } from '@pages/Employee/SchedulePage';
 import { EmployeeAppointmentsPage } from '@pages/Employee/AppointmentsPage';
 import { EmployeeFinancialPage } from '@pages/Employee/FinancialPage';
+import { EmployeeSalonPage } from '@pages/Employee/SalonPage';
 import { EmployeeProfilePage } from '@pages/Employee/ProfilePage';
 
 function BookingConfirmedPage() {
@@ -52,11 +54,20 @@ function App() {
         <Route path="/" element={<LandingPage />} />
         <Route path="/agendar" element={<AgendarPage />} />
         <Route path="/login" element={<LoginPage />} />
-        
-        {/* Client protected routes */}
-        <Route element={<ProtectedRoute allowedRoles={['CLIENT']} />}>
-          <Route path="/meus-agendamentos" element={<ClientAppointmentsPage />} />
-        </Route>
+      </Route>
+
+      {/* Client: painel próprio com sidebar (logout fica na sidebar, como nos
+          demais perfis). Rota sem path = apenas layout; as URLs continuam
+          /meus-agendamentos e /meu-perfil. */}
+      <Route
+        element={
+          <ProtectedRoute allowedRoles={['CLIENT']}>
+            <DashboardLayout variant="client" />
+          </ProtectedRoute>
+        }
+      >
+        <Route path="/meus-agendamentos" element={<ClientAppointmentsPage />} />
+        <Route path="/meu-perfil" element={<ClientProfilePage />} />
       </Route>
 
       {/* Owner Routes */}
@@ -89,6 +100,7 @@ function App() {
         <Route path="agenda" element={<EmployeeSchedulePage />} />
         <Route path="agendamentos" element={<EmployeeAppointmentsPage />} />
         <Route path="financeiro" element={<EmployeeFinancialPage />} />
+        <Route path="salao" element={<EmployeeSalonPage />} />
         <Route path="perfil" element={<EmployeeProfilePage />} />
         <Route index element={<Navigate to="agenda" replace />} />
       </Route>

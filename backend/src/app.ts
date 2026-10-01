@@ -15,6 +15,7 @@ import superadminRoutes from '@routes/superadminRoutes';
 import cronRoutes from '@routes/cronRoutes';
 import { startCronJobs } from '@services/cronService';
 import { usandoSupabase, UPLOAD_ROOT_DISCO } from '@services/imageStorage';
+import { emServerless } from '@config/ambiente';
 
 const app = express();
 
@@ -105,8 +106,21 @@ app.use(notFoundHandler);
 // Error handler
 app.use(errorHandler);
 
-// Inicia jobs agendados
-if (env.NODE_ENV !== 'test') {
+/*
+ * Inicia os jobs agendados — e só num servidor de verdade.
+ *
+ * Este módulo é importado pela função serverless, e lá um `node-cron` é
+ * problemático de um jeito específico: o timer é criado, ocupa memória, e nunca
+ * chega a disparar, porque a função é congelada assim que termina de responder.
+ * Pior, como as instâncias do Vercel são descartadas e recriadas, cada uma
+ * deixaria um timer órfão para trás.
+ *
+ * A verificação é pelo `VERCEL`, e não por `NODE_ENV`: dá para rodar em
+ * `NODE_ENV=production` na máquina de desenvolvimento — que é como a
+ * configuração de produção se prova — e ainda assim ter o cron funcionando
+ * local, que é o que se quer ao testar.
+ */
+if (env.NODE_ENV !== 'test' && !emServerless) {
   startCronJobs();
 }
 

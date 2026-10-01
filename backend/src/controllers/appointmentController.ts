@@ -246,6 +246,36 @@ export async function updateAppointmentStatusController(req: AuthRequest, res: R
     audit.auditContextFrom(req)
   );
 
+  /**
+   * Mensagens disparadas pela mudança de status, com o resultado registrado.
+   *
+   * A chamada existia e o registro não. A diferença aparece na primeira
+   * pergunta de quem é avisado de que o atendimento foi cancelado: "o cliente
+   * recebeu?". Sem isto, o log mostrava o status mudando e nada sobre a
+   * mensagem — e as duas coisas têm causas bem diferentes. A mensagem falha
+   * porque o celular está sem bateria; o status muda porque alguém cliqueu.
+   *
+   * Duas mensagens vão para o mesmo número, por isso a função recebe o motivo
+   * e monta a frase a partir dele, em vez de repetir o bloco de registro.
+   */
+  const notificaCliente = async (enviar: () => Promise<boolean>, uso: string) => {
+    const saiu = await enviar();
+
+    await audit.record(
+      {
+        action: saiu ? AuditAction.WHATSAPP_SENT : AuditAction.WHATSAPP_FAILED,
+        summary: saiu
+          ? `Avisou ${appointment.client.fullName || appointment.client.phone} sobre o cancelamento`
+          : `Não conseguiu avisar ${appointment.client.fullName || appointment.client.phone} sobre o cancelamento`,
+        entity: 'whatsapp',
+        outcome: saiu ? 'SUCCESS' : 'FAILURE',
+        actorKind: 'SYSTEM',
+        metadata: { telefone: appointment.client.phone, uso },
+      },
+      audit.auditContextFrom(req)
+    );
+  };
+
   // Envia notificação se cancelado pelo salão
   if (status === 'CANCELLED' && appointment.status !== 'CANCELLED') {
     const settings = await prisma.salonSettings.findUnique({
@@ -254,18 +284,22 @@ export async function updateAppointmentStatusController(req: AuthRequest, res: R
     });
 
     if (settings) {
-      await sendAppointmentCancellation({
-        clientName: appointment.client.fullName,
-        clientPhone: appointment.client.phone,
-        serviceName: appointment.service.name,
-        dateTime: appointment.startsAt.toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          dateStyle: 'short',
-          timeStyle: 'short',
-        }),
-        salonName: settings.name,
-        reason: notes,
-      });
+      await notificaCliente(
+        () =>
+          sendAppointmentCancellation({
+            clientName: appointment.client.fullName,
+            clientPhone: appointment.client.phone,
+            serviceName: appointment.service.name,
+            dateTime: appointment.startsAt.toLocaleString('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+              dateStyle: 'short',
+              timeStyle: 'short',
+            }),
+            salonName: settings.name,
+            reason: notes,
+          }),
+        'cancelamento'
+      );
     }
   }
 
@@ -277,18 +311,22 @@ export async function updateAppointmentStatusController(req: AuthRequest, res: R
     });
 
     if (settings) {
-      await sendAppointmentConfirmation({
-        clientName: appointment.client.fullName,
-        clientPhone: appointment.client.phone,
-        serviceName: appointment.service.name,
-        employeeName: appointment.employee.name,
-        dateTime: appointment.startsAt.toLocaleString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          dateStyle: 'short',
-          timeStyle: 'short',
-        }),
-        salonName: settings.name,
-      });
+      await notificaCliente(
+        () =>
+          sendAppointmentConfirmation({
+            clientName: appointment.client.fullName,
+            clientPhone: appointment.client.phone,
+            serviceName: appointment.service.name,
+            employeeName: appointment.employee.name,
+            dateTime: appointment.startsAt.toLocaleString('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+              dateStyle: 'short',
+              timeStyle: 'short',
+            }),
+            salonName: settings.name,
+          }),
+        'atendimento concluido'
+      );
     }
   }
 

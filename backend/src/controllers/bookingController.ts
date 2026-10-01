@@ -13,7 +13,7 @@ import {
   cancelBooking,
 } from '@services/scheduleService';
 import { AppError } from '@middlewares/errorHandler';
-import { notifyOwnerNewBooking } from '@services/whatsappService';
+import { notifyOwnerNewBooking, sendAppointmentConfirmation } from '@services/whatsappService';
 import * as audit from '@services/auditService';
 import { AuditAction } from '@services/auditService';
 
@@ -154,25 +154,77 @@ export async function createBookingController(req: AuthRequest, res: Response): 
     select: { name: true },
   });
 
+  const formattedDate = new Date(startsAt).toLocaleString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+
+  /**
+   * Confirmação para o CLIENTE.
+   *
+   * Esta mensagem faltava, e a falta é do tipo que só aparece com uso real: o
+   * site promete "você receberá confirmação e um lembrete", mas a confirmação
+   * só saía quando o atendimento era marcado como CONCLUÍDO — ou seja, no fim.
+   * O cliente terminava o agendamento sem nenhuma confirmação, e ficava na
+   * dúvida se tinha dado certo.
+   *
+   * O que resolve não é a mensagem em si: é que o cliente recebe o código de
+   * verificação logo antes, e espera a confirmação logo depois. Sem ela, ele
+   * não sabe se o agendamento entrou.
+   */
+  if (settings) {
+    const enviada = await sendAppointmentConfirmation({
+      clientName: result.client.fullName,
+      clientPhone: result.client.phone,
+      serviceName: result.appointment.service.name,
+      employeeName: result.appointment.employee.name,
+      dateTime: formattedDate,
+      salonName: settings.name,
+    });
+
+    void audit.record(
+      {
+        action: enviada ? AuditAction.WHATSAPP_SENT : AuditAction.WHATSAPP_FAILED,
+        summary: enviada
+          ? `Enviou a confirmação do agendamento para ${result.client.fullName}`
+          : `Não foi possível enviar a confirmação para ${result.client.fullName}`,
+        entity: 'whatsapp',
+        outcome: enviada ? 'SUCCESS' : 'FAILURE',
+        actorKind: 'SYSTEM',
+        metadata: { telefone: result.client.phone, uso: 'confirmacao de agendamento' },
+      },
+      audit.auditContextFrom(req)
+    );
+  }
+
   const owner = await prisma.user.findFirst({
     where: { role: 'OWNER', isActive: true },
     select: { phone: true },
   });
 
   if (settings && owner?.phone) {
-    const formattedDate = new Date(startsAt).toLocaleString('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-      dateStyle: 'short',
-      timeStyle: 'short',
-    });
-
-    await notifyOwnerNewBooking(
+    const notificado = await notifyOwnerNewBooking(
       owner.phone,
       result.client.fullName,
       result.appointment.service.name,
       result.appointment.employee.name,
       formattedDate,
       settings.name
+    );
+
+    void audit.record(
+      {
+        action: notificado ? AuditAction.WHATSAPP_SENT : AuditAction.WHATSAPP_FAILED,
+        summary: notificado
+          ? `Avisou o dono sobre o agendamento de ${result.client.fullName}`
+          : `Não conseguiu avisar o dono sobre o agendamento de ${result.client.fullName}`,
+        entity: 'whatsapp',
+        outcome: notificado ? 'SUCCESS' : 'FAILURE',
+        actorKind: 'SYSTEM',
+        metadata: { telefone: owner.phone, uso: 'novo agendamento' },
+      },
+      audit.auditContextFrom(req)
     );
   }
 

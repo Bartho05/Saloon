@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!--
+    Favicon monocromático: fundo preto, tesoura branca.
+
+    Sem logo: o projeto não tem identidade visual de marca — o nome do salão é
+    um dado, não um símbolo. Um ícone genérico que funciona é melhor que um 404
+    em toda página.
+
+    O arquivo é pequeno de propósito: é baixado em toda visita, antes de
+    qualquer outra coisa.
+  -->
+  <rect width="32" height="32" fill="#111111"/>
+  <g stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round">
+    <circle cx="10" cy="9" r="3.2"/>
+    <circle cx="10" cy="23" r="3.2"/>
+    <path d="M12.6 11.2 L23 21"/>
+    <path d="M12.6 20.8 L23 11"/>
+  </g>
+</svg>

@@ -12,7 +12,17 @@
     <title>Agendamento online</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <!--
+      Space Grotesk é a fonte `display`, a que carrega a tipografia editorial do
+      projeto. Ela estava faltando aqui: o CSS declarava a família, o navegador
+      não tinha o arquivo, e tudo caía em system-ui. O efeito é silencioso —
+      o `getComputedStyle` continua devolvendo "Space Grotesk", então uma
+      inspeção de estilo não denuncia nada, mas o desenho na tela é outro.
+
+      `display=swap` no parâmetro: mostra a fonte de sistema primeiro e troca
+      quando a chega. É preferível a um instante de tela vazia.
+    -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

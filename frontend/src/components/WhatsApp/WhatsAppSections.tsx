@@ -13,6 +13,7 @@ interface Estado {
   conectado: boolean;
   numero: string | null;
   pushName: string | null;
+  smartphoneConectado: boolean | null;
   mensagem: string;
 }
 
@@ -115,6 +116,11 @@ export function EstadoWhatsApp({
           </p>
           <p className="text-body-sm text-brand-grayMid mt-1 break-words">{estado.mensagem}</p>
 
+          {/*
+            O número só aparece se a Z-API mandar. Ela normalmente não manda, e
+            a versão anterior escrevia "número desconhecido", que soava a defeito
+            num sistema perfeito. O bloco some em vez de Inventar.
+          */}
           {estado.conectado && estado.numero && (
             <p className="text-caption text-brand-grayMid mt-2 flex items-center gap-1.5">
               <PhoneIcon className="w-3.5 h-3.5" />
@@ -140,18 +146,23 @@ export function EstadoWhatsApp({
 /**
  * QR Code para parear o celular.
  *
- * Fica escondido até o dono pedir. Uma imagem de QR sempre visível na tela de
- * configurações seria ruído para quem já connected — e, pior, o QR Code expira
- * em poucos minutos, então uma imagem parada na tela vira um_square que não
- * funciona, que é pior do que não mostrar nada.
+ * Fica escondido até o dono pedir. Uma imagem de QR sempre visível seria ruído
+ * para quem já conectou — e, pior, o QR expira em poucos minutos, então uma
+ * imagem parada na tela vira um quadrado que não funciona.
+ *
+ * O caso "já está conectado" é tratado como o que é: o melhor estado possível.
+ * A Z-API devolve `{connected: true}` e nenhum QR nesse caso, e apresentar isso
+ * como erro mostraria um cartão vermelho num sistema funcionando.
  */
 export function ParearCelular({
   qr,
+  jaConectado,
   carregando,
   onGerar,
   onAbrirLink,
 }: {
   qr: string | null;
+  jaConectado: boolean;
   carregando: boolean;
   onGerar: () => void;
   onAbrirLink: string | null;
@@ -165,7 +176,30 @@ export function ParearCelular({
         na tela do celular.
       </p>
 
-      {!qr ? (
+      {jaConectado ? (
+        <div className="flex items-start gap-3 border border-brand-gray p-4">
+          <CheckCircleIcon className="w-5 h-5 text-brand-grayMid flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-display font-medium text-body-sm">
+              Este número já está conectado
+            </p>
+            <p className="text-body-sm text-brand-grayMid mt-1">
+              Não há código a exibir, e não precisa haver: o WhatsApp está pareado e
+              mandando. Para trocar de celular, desconecte em
+              <strong> Aparelhos conectados</strong> no WhatsApp do celular e gere o código
+              de novo.
+            </p>
+            <button
+              onClick={onGerar}
+              disabled={carregando}
+              className="mt-3 flex items-center gap-2 text-caption text-brand-grayMid hover:text-brand-black transition-colors duration-fast disabled:opacity-40"
+            >
+              <RefreshIcon className={`w-3.5 h-3.5 ${carregando ? 'animate-spin' : ''}`} />
+              Verificar de novo
+            </button>
+          </div>
+        </div>
+      ) : !qr ? (
         <button
           onClick={onGerar}
           disabled={carregando}
@@ -186,9 +220,7 @@ export function ParearCelular({
           <div className="flex-1 min-w-[200px]">
             <p className="flex items-start gap-2 text-caption text-brand-grayMid">
               <ClockIcon className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              <span>
-                Este código expira em poucos minutos. Se passar, gere outro.
-              </span>
+              <span>Este código expira em poucos minutos. Se passar, gere outro.</span>
             </p>
 
             {onAbrirLink && (

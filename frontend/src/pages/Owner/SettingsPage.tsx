@@ -63,6 +63,7 @@ export function OwnerSettingsPage() {
     conectado: boolean;
     numero: string | null;
     pushName: string | null;
+    smartphoneConectado: boolean | null;
     mensagem: string;
   } | null>(null);
   const [erroEstado, setErroEstado] = useState<string | null>(null);
@@ -70,6 +71,12 @@ export function OwnerSettingsPage() {
 
   const [qrCode, setQrCode] = useState<string | null>(null);
   const [qrLink, setQrLink] = useState<string | null>(null);
+  /**
+   * A Z-API devolve `{connected: true}` e nenhum QR quando o número já está
+   * pareado. Tratar a ausência de QR como falha mostraria um cartão de erro
+   * num sistema funcionando — com o dono procurando defeito onde não há.
+   */
+  const [qrJaConectado, setQrJaConectado] = useState(false);
   const [carregandoQr, setCarregandoQr] = useState(false);
   const [registrandoWebhooks, setRegistrandoWebhooks] = useState(false);
   const [webhooksOk, setWebhooksOk] = useState<boolean | null>(null);
@@ -120,9 +127,11 @@ export function OwnerSettingsPage() {
       const qr = await ownerApi.getWhatsAppQrCode();
       setQrCode(qr.base64);
       setQrLink(qr.link);
+      setQrJaConectado(qr.jaConectado);
     } catch (err: any) {
       setQrCode(null);
       setQrLink(null);
+      setQrJaConectado(false);
       showToast({ type: 'error', title: 'Não foi possível gerar o QR Code', message: err.message });
     } finally {
       setCarregandoQr(false);
@@ -622,6 +631,7 @@ export function OwnerSettingsPage() {
           {whatsappConfig.provider === 'zapi' && (
             <ParearCelular
               qr={qrCode}
+              jaConectado={qrJaConectado}
               carregando={carregandoQr}
               onGerar={() => void buscarQrCode()}
               onAbrirLink={qrLink}

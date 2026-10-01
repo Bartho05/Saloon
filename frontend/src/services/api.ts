@@ -469,12 +469,24 @@ export const ownerApi = {
       conectado: boolean;
       numero: string | null;
       pushName: string | null;
+      smartphoneConectado: boolean | null;
       mensagem: string;
     }>('/owner/whatsapp/status'),
 
-  /** QR Code para parear o celular, sem precisar abrir o painel da Z-API. */
+  /**
+   * QR Code para parear o celular, sem precisar abrir o painel da Z-API.
+   *
+   * `jaConectado` vem true quando a Z-API responde `{connected: true}` e nenhum
+   * QR — que é o caso de um número já pareado, o melhor estado possível, e não
+   * uma falha.
+   */
   getWhatsAppQrCode: () =>
-    request<{ base64: string; link: string | null }>('/owner/whatsapp/qrcode'),
+    request<{
+      base64: string | null;
+      link: string | null;
+      jaConectado: boolean;
+      mensagem: string | null;
+    }>('/owner/whatsapp/qrcode'),
 
   /** Cadastra os webhooks de entrega e desconexão. */
   registerWhatsAppWebhooks: () =>

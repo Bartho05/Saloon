@@ -103,11 +103,19 @@ function url(config: WhatsAppConfig, path: string): string {
 }
 
 /**
- * Header opcional de segurança.
+ * Headers de segurança da conta.
  *
- * A Z-API recomenda um "token de segurança da conta" que, se enviado, faz a API
- * recusar chamadas vindas de IP não cadastrado. É o que impede alguém descobrir
- * a URL da instância e mandar mensagem em nome do salão.
+ * O `Client-Token` NÃO é opcional na prática. A documentação da Z-API trata
+ * como opcional porque o recurso começa desativado, e enquanto desativado a API
+ * aceita chamada sem ele. Mas assim que a conta tem o token gerado e ativo, a
+ * Z-API recusa toda requisição que não o traga — e a recusa é a mesma para
+ * envio, QR Code e consulta de status.
+ *
+ * Por isso ele vive AQUI, e não em cada função. A primeira versão o enviava
+ * só em `sendText`, e o resultado foi um sistema que não enviava mensagem e
+ * também não conseguia mostrar o QR Code nem o estado — as três coisas que
+ * servem justamente para diagnosticar a falha. Um header esquecido em duas
+ * das três chamadas é um botão de diagnóstico quebrado.
  */
 function headers(config: WhatsAppConfig, extra: Record<string, string> = {}) {
   const h: Record<string, string> = { 'Content-Type': 'application/json', ...extra };
@@ -130,7 +138,14 @@ async function call<T>(
 
   let response: Response;
   try {
-    response = await fetch(url(config, path), { ...init, signal: controller.signal });
+    response = await fetch(url(config, path), {
+      ...init,
+      // O header de segurança entra AQUI, e não em cada chamador, para que
+      // nenhuma rota o esqueça. Um header presente em duas das três chamadas é
+      // um botão de diagnóstico quebrado, e foi exatamente o que aconteceu.
+      headers: headers(config, (init.headers as Record<string, string>) ?? {}),
+      signal: controller.signal,
+    });
   } catch (err) {
     const e = err as Error;
     if (e.name === 'AbortError') {
@@ -193,13 +208,15 @@ export interface ZApiStatus {
   instanciaExiste: boolean;
   /** O WhatsApp está pareado e pronto para enviar. */
   conectado: boolean;
-  /** Número com DDI, como a Z-API devolve ("5511999999999"). */
+  /** Celular com o WhatsApp aberto junto, quando a Z-API informa. */
+  smartphoneConectado: boolean | null;
+  /** Número com DDI, se a Z-API fornecer. */
   numero: string | null;
   /** Nome de quem está logado, quando disponível. */
   pushName: string | null;
   /** Motivo da desconexão, se houver. */
   desconexao: string | null;
-  /** Mensagem original, para a tela de diagnóstico. */
+  /** Resposta original, para o diagnóstico. */
   bruto: unknown;
 }
 
@@ -207,39 +224,54 @@ export interface ZApiStatus {
  * Estado da instância.
  *
  * A pergunta que o dono faz é "está funcionando?", e ela não se responde
- * enviando mensagem de teste: uma mensagem pode falhar por estar sem
- * internet no celular, e falhar por estar desconexado do servidor são problemas
- * opostos. Esta rota lê o estado diretamente.
+ * enviando mensagem de teste: uma mensagem falha porque o celular está sem
+ * internet e falha porque o servidor está desconectado — problemas opostos, com
+ * consertos opostos. Esta rota lê o estado direto.
  */
 export async function status(): Promise<ZApiStatus> {
   const config = await requireConfig();
   const bruto = await call<any>(config, 'status');
 
-  // A Z-API usa `status` como string ("CONNECTED", "CONNECTING", ...) e em
-  // algumas versões como objeto com `connected`. Os dois são tratados, porque
-  // "conectado" é a única informação que a tela realmente precisa.
-  const brutoStatus = bruto?.status;
-  const conectado =
-    brutoStatus === 'CONNECTED' ||
-    brutoStatus === 'connected' ||
-    bruto?.connected === true ||
-    bruto?.state === 'CONNECTED';
+  /**
+   * `connected` é o que decide, e a Z-API o manda como booleano.
+   *
+   * As outras formas (string "CONNECTED", campo `state`) ficam por causa de
+   * versões diferentes da API, mas a booleana é o que vem hoje — verificado
+   * numa conta real.
+   *
+   * O detalhe que quase passou: a resposta de SUCESSO traz `error:
+   * "You are already connected."`. Isto é informação, não problema. O booleano
+   * verdadeiro manda, e o texto só vira "desconexão" quando ele é falso.
+   * Confundir os dois declararia instância saudável como quebrada.
+   */
+  const conectado = bruto?.connected === true;
+  const motivo = bruto?.error ?? bruto?.status ?? bruto?.state ?? null;
 
   return {
     instanciaExiste: true,
     conectado,
+    smartphoneConectado:
+      typeof bruto?.smartphoneConnected === 'boolean' ? bruto.smartphoneConnected : null,
     numero: bruto?.phone ?? bruto?.number ?? null,
     pushName: bruto?.pushName ?? bruto?.pushname ?? null,
-    desconexao: bruto?.status !== undefined && !conectado ? String(brutoStatus) : null,
+    desconexao: conectado ? null : motivo ? String(motivo) : null,
     bruto,
   };
 }
 
 export interface ZApiQrCode {
   /** Base64 do PNG, sem o prefixo `data:image/png;base64,`. */
-  base64: string;
+  base64: string | null;
   /** Link alternativo, para o dono abrir no celular em vez de escanear na tela. */
   link: string | null;
+  /**
+   * A instância já está conectada e por isso não há QR a exibir.
+   *
+   * Isto NÃO é erro: é o melhor estado possível, e tratá-lo como falha
+   * mostrava um cartão vermelho num sistema funcionando — com o dono achando
+   * que tinha quebrado alguma coisa.
+   */
+  jaConectado: boolean;
   bruto: unknown;
 }
 
@@ -254,9 +286,23 @@ export async function qrCode(): Promise<ZApiQrCode> {
   const bruto = await call<any>(config, 'qr-code');
 
   const valor = bruto?.result ?? bruto?.code ?? bruto?.base64 ?? bruto?.qrcode ?? bruto?.value;
+
   if (typeof valor !== 'string' || !valor) {
+    /**
+     * A Z-API responde `{ connected: true }` e nenhum QR quando o número já
+     * está pareado. É o estado saudável, não uma falha — e é assim que uma
+     * conta real respondeu na primeira configuração.
+     *
+     * A distinção importa: sem ela, a tela de pareamento acusava erro justamente
+     * quando não havia nada para consertar.
+     */
+    if (bruto?.connected === true) {
+      return { base64: null, link: null, jaConectado: true, bruto };
+    }
+
     throw new ZApiError(
-      'A Z-API devolveu uma resposta sem QR Code. A instância pode já estar conectada.',
+      'A Z-API não devolveu um QR Code. Se o número ainda não estiver conectado, ' +
+        'tente Novamente; se já estiver, o WhatsApp já está pareado.',
       undefined,
       bruto
     );
@@ -266,6 +312,7 @@ export async function qrCode(): Promise<ZApiQrCode> {
     // Alguns retornos trazem o prefixo data URI; o frontend usa só o base64.
     base64: valor.replace(/^data:image\/\w+;base64,/, ''),
     link: bruto?.link ?? bruto?.url ?? null,
+    jaConectado: false,
     bruto,
   };
 }
@@ -289,19 +336,29 @@ export async function configureWebhooks(baseUrl: string): Promise<{ ok: boolean;
   const urlWebhook = `${baseUrl.replace(/\/+$/, '')}/api/whatsapp/webhook`;
 
   try {
+    /**
+     * PUT, e não POST.
+     *
+     * Verificado contra a API real: `POST /update-webhooks` responde 405
+     * "Method Not Allowed", e `PUT` responde `{"value":true}`. A documentação
+     * online mostra o payload em exemplo sem deixar o método explícito, e é
+     * fácil assumir POST — que falha silenciosamente do ponto de vista de quem
+     * olha a tela, porque o dono só descobre que nada chega quando o cliente
+     * reclama.
+     *
+     * Os três eventos cobrem o que interessa: entrega da mensagem, mudança de
+     * status e — o mais importante de todos — a desconexão.
+     */
     await call(config, 'update-webhooks', {
-      method: 'POST',
+      method: 'PUT',
       body: JSON.stringify({
-        // Entrega: o sistema precisa saber se a mensagem chegou no celular do
-        // cliente, e não só se saiu da API.
         'on-message-send': urlWebhook,
         'on-whatsapp-message-status-changes': urlWebhook,
-        // Desconexão: o alerta mais importante que existe.
         'on-whatsapp-disconnected': urlWebhook,
       }),
     });
 
-    return { ok: true, detalhe: `Webhooks apontando para ${urlWebhook}` };
+    return { ok: true, detalhe: `Avisos registrados. A Z-API avisa ${urlWebhook}` };
   } catch (err) {
     return {
       ok: false,
@@ -324,7 +381,6 @@ export async function sendText(
 
   const bruto = await call<any>(config, 'send-text', {
     method: 'POST',
-    headers: headers(config),
     body: JSON.stringify({ phone, message }),
   });
 
@@ -340,7 +396,6 @@ export async function sendFile(phone: string, url: string, caption?: string): Pr
 
   return call(config, 'send-file-url', {
     method: 'POST',
-    headers: headers(config),
     body: JSON.stringify({ phone, url, caption }),
   });
 }

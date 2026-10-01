@@ -163,13 +163,37 @@ export async function status(req: AuthRequest, res: Response): Promise<void> {
       );
     }
 
+    /**
+     * A mensagem de sucesso não promete mostrar o número.
+     *
+     * A Z-API não devolve o número em `/status` — a resposta traz só
+     * `connected`, `session` e `smartphoneConnected`. A versão anterior
+     * escrevia "Conectado no número desconhecido", que soava a defeito quando
+     * o sistema estava perfeito: o dono lia "desconhecido" e ia procurar um
+     * problema que não existia.
+     *
+     * A informação que a API dá de útil é o segundo celular: com ele aberto, a
+     * Z-API mantém a sessão viva de forma mais estável. Quando ela informa,
+     * isso vira nota em vez de número inventado.
+     */
+    const notas: string[] = [];
+
+    if (estado.smartphoneConectado === true) {
+      notas.push('Com o WhatsApp aberto no celular, a sessão fica mais estável.');
+    } else if (estado.smartphoneConectado === false) {
+      notas.push(
+        'O celular não está com o WhatsApp aberto. A sessão pode cair sozinha depois de um tempo.'
+      );
+    }
+
     res.json({
       configurado: true,
       conectado: estado.conectado,
       numero: estado.numero,
       pushName: estado.pushName,
+      smartphoneConectado: estado.smartphoneConectado,
       mensagem: estado.conectado
-        ? `Conectado no número ${estado.numero ?? 'desconhecido'}.`
+        ? ['O WhatsApp está conectado e as mensagens estão saindo.', ...notas].join(' ')
         : `O WhatsApp está desconectado. Motivo informado: ${estado.desconexao ?? 'não informado'}.`,
     });
   } catch (err) {
@@ -207,7 +231,22 @@ export async function qrcode(req: AuthRequest, res: Response): Promise<void> {
   try {
     const qr = await zapi.qrCode();
 
-    res.json({ base64: qr.base64, link: qr.link });
+    /**
+     * Já pareado é sucesso, e a tela precisa saber disso.
+     *
+     * A Z-API devolve `{ connected: true }` sem QR quando o número já está
+     * conectado. A versão anterior tratava a ausência de QR como falha, e a
+     * tela mostrava um cartão de erro num sistema perfeitamente funcionando —
+     * com o dono procurando um problema que não existia.
+     */
+    res.json({
+      base64: qr.base64,
+      link: qr.link,
+      jaConectado: qr.jaConectado,
+      mensagem: qr.jaConectado
+        ? 'O número já está conectado. Desconecte no celular (Aparelhos conectados) se quiser parear de novo.'
+        : null,
+    });
   } catch (err) {
     const mensagem = err instanceof Error ? err.message : 'Não foi possível gerar o QR Code';
 

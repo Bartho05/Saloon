@@ -243,9 +243,25 @@ export async function sendWhatsAppMessageDetailed(
       corpo = null;
     }
 
-    // A Z-API devolve 200 com `status: "ERROR"` em alguns casos de
-    // desconexão. Sem esta checagem, "desconectado" viraria "enviado".
-    if (corpo && (corpo.status === 'ERROR' || corpo.error)) {
+    /**
+    /**
+     * A Z-API devolve HTTP 200 mesmo quando recusa o envio, e sinaliza no
+     * corpo. E aqui que mora uma armadilha.
+     *
+     * A resposta de `/status` de uma instancia SAUDAVEL traz
+     * `error: "You are already connected."`. Isto e informacao, nao falha.
+     * A checagem antiga aceitava qualquer campo `error` presente, o que
+     * transformaria um envio bem-sucedido em "falhou" - e o dono deixaria de
+     * acreditar nas confirmacoes.
+     *
+     * Entao a regra e: so ha erro quando o corpo NAO trouxer identificador de
+     * mensagem. `messageId` presente significa que a API aceitou a mensagem, e
+     * nenhum outro campo pode desmentir isso.
+     */
+    const temId = Boolean(corpo?.messageId ?? corpo?.key?.id ?? corpo?.id);
+    const pareceErro = corpo?.status === 'ERROR' || (corpo?.error && !temId);
+
+    if (corpo && pareceErro) {
       const bruto =
         corpo.message ??
         corpo.error?.message ??

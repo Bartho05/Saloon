@@ -150,6 +150,19 @@ export const updateSettingsSchema = z.object({
       instanceId: z.string(),
       token: z.string(),
       apiUrl: z.string().url(),
+      /**
+       * Token de segurança da conta Z-API.
+       *
+       * Estava faltando aqui, e a consequência foi silenciosa: o Zod descarta
+       * campo desconhecido sem reclamar. O campo existia na tela, a pessoa
+       * preenchia, e o valor sumia antes de chegar no banco — sem erro, sem
+       * aviso, e a Z-API recusava tudo com "client-token is not configured".
+       *
+       * Campo secretado que o schema esquece é a pior classe de bug: a tela
+       * aceita, o banco nunca viu, e o sintoma aparece do outro lado, em um
+       * serviço de terceiro que ninguém suspects.
+       */
+      clientToken: z.string().optional(),
     })
     .optional()
     .nullable(),

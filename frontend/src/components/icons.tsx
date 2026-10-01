@@ -142,6 +142,14 @@ export const ShieldIcon = ({ className }: IconProps) => (
   <svg {...base} className={className}><path d="M12 2.5 20 6v6c0 5-3.4 8.9-8 9.5C7.4 20.9 4 17 4 12V6Z" /><path d="m9 12 2 2 4-4" /></svg>
 );
 
+export const KeyIcon = ({ className }: IconProps) => (
+  <svg {...base} className={className}><circle cx="8" cy="12" r="4" /><path d="M12 12h9M18 12v3.5M15 12v2.5" /></svg>
+);
+
+export const UserPlusIcon = ({ className }: IconProps) => (
+  <svg {...base} className={className}><circle cx="10" cy="8" r="3.75" /><path d="M3 20.5a7 7 0 0 1 11.2-5.6" /><path d="M18.5 14v6M15.5 17h6" /></svg>
+);
+
 export const LockIcon = ({ className }: IconProps) => (
   <svg {...base} className={className}><rect x="4" y="10" width="16" height="10.5" rx="1.5" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /></svg>
 );

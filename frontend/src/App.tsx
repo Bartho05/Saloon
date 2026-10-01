@@ -18,6 +18,12 @@ import { EmployeeSchedulePage } from '@pages/Employee/SchedulePage';
 import { EmployeeAppointmentsPage } from '@pages/Employee/AppointmentsPage';
 import { EmployeeFinancialPage } from '@pages/Employee/FinancialPage';
 import { EmployeeProfilePage } from '@pages/Employee/ProfilePage';
+import { SuperAdminLayout } from '@layouts/SuperAdminLayout';
+import { SuperAdminLoginPage } from '@pages/SuperAdmin/LoginPage';
+import { SuperAdminOverviewPage } from '@pages/SuperAdmin/OverviewPage';
+import { SuperAdminOwnersPage } from '@pages/SuperAdmin/OwnersPage';
+import { SuperAdminAccountsPage } from '@pages/SuperAdmin/AccountsPage';
+import { SuperAdminAuditPage } from '@pages/SuperAdmin/AuditPage';
 
 function BookingConfirmedPage() {
   return (
@@ -110,6 +116,30 @@ function App() {
         <Route path="financeiro" element={<EmployeeFinancialPage />} />
         <Route path="perfil" element={<EmployeeProfilePage />} />
         <Route index element={<Navigate to="agenda" replace />} />
+      </Route>
+
+      {/* ───────────────────────────────────────────────────────────────────
+          SUPERADMIN
+
+          Rota à parte do `DashboardLayout` e com guarda própria. O acesso
+          máximo é a única coisa aqui que existe ANTES de qualquer dono — é o
+          que cria o primeiro. Por isso o login fica fora do `ProtectedRoute`:
+          enquanto a instalação está vazia não há ninguém para gerar o token.
+          ─────────────────────────────────────────────────────────────────── */}
+      <Route path="/superadmin/login" element={<SuperAdminLoginPage />} />
+
+      <Route
+        path="/superadmin/*"
+        element={
+          <ProtectedRoute allowedRoles={['SUPERADMIN']}>
+            <SuperAdminLayout />
+          </ProtectedRoute>
+        }
+      >
+        <Route index element={<SuperAdminOverviewPage />} />
+        <Route path="proprietarios" element={<SuperAdminOwnersPage />} />
+        <Route path="contas" element={<SuperAdminAccountsPage />} />
+        <Route path="auditoria" element={<SuperAdminAuditPage />} />
       </Route>
 
       {/* Redirects */}

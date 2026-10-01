@@ -273,15 +273,38 @@
     @apply flex gap-1 bg-brand-grayLight p-1 rounded-none;
   }
 
+  /* Preenchendo a linha toda, com segmentos de largura igual.
+     No login as três abas (Cliente / Proprietário / Funcionário) têm rótulos
+     de comprimentos diferentes, e com a largura pelo conteúdo elas ficavam
+     76 / 108 / 107px: a aba ativa, que tem fundo, não alinhava com as
+     vizinhas e o grupo ficava grudado à esquerda sobrando área vazia à
+     direita. Aqui cada segmento ocupa a mesma fração e o rótulo é
+     centralizado nele.
+
+     Não entra em `.tab` porque o seletor de período (Dia/Mês/Ano) é curto e
+     precisa continuar com a largura pelo conteúdo. */
+  .tabs-fill {
+    @apply flex gap-1;
+  }
+
+  .tabs-fill > .tab {
+    @apply flex-1 justify-center;
+  }
+
   /* Estado vem de .tab-active/.tab-inactive, não de data-[state=active].
      A variante de atributo em @apply não é gerada de forma confiável —
-     verificamos no browser que a aba ativa ficava sem fundo. */
+     verificamos no browser que a aba ativa ficava sem fundo.
+
+     A borda é transparente por padrão e real na aba ativa de propósito: sem
+     ela, a aba ativa (que tem fundo branco) ficava 1px mais estreita que as
+     outras e o texto saltava na hora de trocar de aba. */
   .tab {
-    @apply flex items-center gap-2 px-4 py-2.5 font-display font-medium text-body-sm rounded-none transition-all duration-fast;
+    @apply flex items-center gap-2 px-4 py-2.5 font-display font-medium text-body-sm rounded-none
+           border border-transparent transition-all duration-fast;
   }
 
   .tab-active {
-    @apply bg-brand-white text-brand-black shadow-elevated;
+    @apply bg-brand-white text-brand-black border-brand-gray shadow-elevated;
   }
 
   .tab-inactive {

@@ -4,7 +4,7 @@ import { useAuth } from '@hooks/useAuth';
 import { Button } from '@components/ui';
 
 interface ProtectedRouteProps {
-  allowedRoles: ('OWNER' | 'EMPLOYEE' | 'CLIENT')[];
+  allowedRoles: ('OWNER' | 'EMPLOYEE' | 'CLIENT' | 'SUPERADMIN')[];
   children?: ReactNode;
 }
 
@@ -55,12 +55,27 @@ export function ProtectedRoute({ allowedRoles, children }: ProtectedRouteProps) 
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" state={{ from: location }} replace />;
+    /**
+     * Rota do superadmin manda para o login DELE, não para o do salão.
+     *
+     * Sem esta distinção, alguém sem sessão ia para `/login` e ver as abas de
+     * cliente/proprietário/funcionário — nenhuma delas leva ao acesso máximo,
+     * e a instalação zerada ficaria sem caminho para o primeiro acesso.
+     */
+    const destino = allowedRoles.includes('SUPERADMIN') ? '/superadmin/login' : '/login';
+    return <Navigate to={destino} state={{ from: location }} replace />;
   }
 
   if (role && !allowedRoles.includes(role)) {
     // Rota da home de acordo com o perfil do usuário
-    const home = role === 'OWNER' ? '/owner/dashboard' : role === 'EMPLOYEE' ? '/funcionario/agenda' : '/';
+    const home =
+      role === 'OWNER'
+        ? '/owner/dashboard'
+        : role === 'EMPLOYEE'
+          ? '/funcionario/agenda'
+          : role === 'SUPERADMIN'
+            ? '/superadmin'
+            : '/';
     return <Navigate to={home} replace />;
   }
 

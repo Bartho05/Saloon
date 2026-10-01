@@ -158,6 +158,42 @@ export const updateSettingsSchema = z.object({
   slotInterval: z.number().int().min(15).max(60).optional(),
 });
 
+// Superadmin schemas
+export const superadminSchema = {
+  bootstrap: z.object({
+    name: z.string().min(2, 'Informe seu nome').max(80),
+    email: z.string().email('E-mail inválido'),
+    seed: z.string().min(1, 'Informe a semente de instalação'),
+  }),
+
+  login: z.object({
+    email: z.string().email('E-mail inválido'),
+    /**
+     * Aceita o código com ou sem os espaços dos grupos de 4, e em minúsculas.
+     * O código é copiado da tela e colado com espaço; exigir o formato exato
+     * faria o operador perder tempo com algo que ele não pode errar de
+     * propósito.
+     */
+    code: z
+      .string()
+      .min(8, 'Código incompleto')
+      .max(64)
+      .transform((v) => v.replace(/[\s-]/g, '').toUpperCase()),
+  }),
+
+  id: z.coerce.number().int().positive(),
+
+  setActive: z.object({ isActive: z.boolean() }),
+
+  /** Primeiro proprietário da instalação, criado pelo superadmin. */
+  createOwner: z.object({
+    name: z.string().min(2, 'Informe o nome').max(80),
+    email: z.string().email('E-mail inválido'),
+    phone: phoneSchema,
+    password: z.string().min(6, 'A senha deve ter pelo menos 6 caracteres'),
+  }),
+};
+
 // Financial schemas
 export const financialQuerySchema = z.object({
   period: z.enum(['day', 'month', 'year']).default('month'),

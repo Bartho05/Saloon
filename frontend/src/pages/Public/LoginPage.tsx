@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { PhoneInput } from '@components/PhoneInput';
 import { useAuth } from '@hooks/useAuth';
 import { useToast } from '@contexts/ToastContext';
@@ -249,8 +249,10 @@ export function LoginPage() {
               <p className="text-body-sm text-brand-grayMid mt-2">Acesse sua conta</p>
             </div>
 
-            {/* Tabs */}
-            <div className="tabs mb-8" role="tablist">
+            {/* Abas em segmentos de largura igual: "Cliente", "Proprietário" e
+                "Funcionário" têm comprimentos bem diferentes, e com a largura
+                pelo conteúdo a aba ativa não alinhava com as vizinhas. */}
+            <div className="tabs-fill mb-8" role="tablist" aria-label="Tipo de acesso">
               {TABS.map((tab) => (
                 <button
                   key={tab.key}
@@ -387,6 +389,23 @@ export function LoginPage() {
             <p className="text-caption text-brand-grayMid text-center">
               Agendamento online
             </p>
+
+            {/*
+              Entrada do acesso máximo.
+              Fica aqui porque a instalação pode estar zerada: sem caminho
+              para /superadmin/login, quem vai instalar simplesmente não
+              encontra a tela. Discreto de propósito — as abas acima são de
+              quem usa o salão, e o acesso administrativo não é para elas.
+            */}
+            <div className="mt-6 text-center">
+              <Link
+                to="/superadmin/login"
+                className="text-caption text-brand-grayMid hover:text-brand-black underline underline-offset-4 transition-colors duration-fast"
+              >
+                Acesso administrativo
+              </Link>
+            </div>
+
             <DevCredits className="mt-3" />
           </CardContent>
         </Card>

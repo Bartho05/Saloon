@@ -12,6 +12,7 @@ import publicRoutes from '@routes/publicRoutes';
 import ownerRoutes from '@routes/ownerRoutes';
 import employeeRoutes from '@routes/employeeRoutes';
 import clientRoutes from '@routes/clientRoutes';
+import superadminRoutes from '@routes/superadminRoutes';
 import { startCronJobs } from '@services/cronService';
 
 const app = express();
@@ -64,6 +65,7 @@ api.use('/', publicRoutes);
 api.use('/owner', ownerRoutes);
 api.use('/employee', employeeRoutes);
 api.use('/client', clientRoutes);
+api.use('/superadmin', superadminRoutes);
 
 app.use('/api', api);
 
@@ -74,6 +76,7 @@ app.use('/', publicRoutes);
 app.use('/owner', ownerRoutes);
 app.use('/employee', employeeRoutes);
 app.use('/client', clientRoutes);
+app.use('/superadmin', superadminRoutes);
 
 // 404 handler
 app.use(notFoundHandler);

@@ -65,11 +65,32 @@ export interface User {
 export type AuthUser = User & Partial<Pick<Employee, 'specialties' | 'photoUrl'>>;
 
 export interface AuthState {
-  user: User | Client | null;
+  user: User | Client | SuperAdmin | null;
   accessToken: string | null;
   refreshToken: string | null;
   isAuthenticated: boolean;
-  role: 'OWNER' | 'EMPLOYEE' | 'CLIENT' | null;
+  role: 'OWNER' | 'EMPLOYEE' | 'CLIENT' | 'SUPERADMIN' | null;
+}
+
+/**
+ * Superadmin: acesso de nível máximo à instalação.
+ *
+ * Fica FORA de `User` de propósito. Ele não é profissional nem cliente, não
+ * tem código de acesso de funcionário em texto no banco e não atende nobody.
+ * Misturá-lo em `User` faria a tela de funcionários do dono listar alguém que
+ * não atende.
+ */
+export interface SuperAdmin {
+  id: number;
+  name: string;
+  email: string;
+  isActive?: boolean;
+  lastLoginAt?: string | null;
+  /** Identificação do código ativo. Não permite recuperá-lo. */
+  codeFingerprint?: string;
+  codeCreatedAt?: string;
+  codeRotatedAt?: string | null;
+  createdAt?: string;
 }
 
 export interface TimeSlot {

@@ -1,4 +1,4 @@
-import type { Service, Employee, Client, Appointment, TimeSlot, SalonSettings } from '@types';
+import type { Service, Employee, Client, Appointment, TimeSlot, SalonSettings, SuperAdmin } from '@types';
 
 /**
  * Prefixo da API.
@@ -182,7 +182,107 @@ clientVerifyCode: (phone: string, code: string) =>
       body: JSON.stringify({ refreshToken }),
     }),
 
-  getMe: () => request<{ user: any } | { client: Client }>('/auth/me'),
+  getMe: () => request<{ user: any } | { client: Client } | { superAdmin: SuperAdmin }>('/auth/me'),
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Superadmin
+//
+// Nenhuma função daqui devolve o código de acesso: o servidor guarda só o
+// hash, que não tem volta. O código aparece UMA vez, no bootstrap e na rotação.
+// ─────────────────────────────────────────────────────────────────────────────
+export interface SuperAdminOverview {
+  counts: {
+    superAdmins: number;
+    owners: number;
+    employees: number;
+    services: number;
+    clients: number;
+    appointments: number;
+  };
+  salonName: string | null;
+  lastLoginAt: string | null;
+  failedLoginAttempts: number;
+  steps: Array<{
+    key: string;
+    label: string;
+    done: boolean;
+    detail: string;
+    route: string | null;
+  }>;
+  ready: boolean;
+}
+
+export interface AuditEntry {
+  id: number;
+  action: string;
+  ip: string | null;
+  userAgent: string | null;
+  detail: string | null;
+  createdAt: string;
+  superAdmin: { name: string; email: string } | null;
+}
+
+export const superadminApi = {
+  /** Público: existe superadmin? Decide entre login e instalação. */
+  getBootstrapStatus: () => request<{ hasSuperAdmin: boolean }>('/superadmin/bootstrap-status'),
+
+  /** Cria o primeiro superadmin. Só funciona com a semente do servidor. */
+  bootstrap: (data: { name: string; email: string; seed: string }) =>
+    request<{ superAdmin: SuperAdmin; accessCode: string }>('/superadmin/bootstrap', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  login: (email: string, code: string) =>
+    request<{
+      superAdmin: SuperAdmin;
+      accessToken: string;
+      refreshToken: string;
+    }>('/superadmin/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, code }),
+    }),
+
+  getOverview: () => request<{ status: SuperAdminOverview }>('/superadmin/overview'),
+
+  getAccounts: () => request<{ superAdmins: SuperAdmin[] }>('/superadmin/accounts'),
+
+  getAudit: (limit = 100) => request<{ entries: AuditEntry[] }>(`/superadmin/audit?limit=${limit}`),
+
+  getOwners: () =>
+    request<{
+      owners: Array<{
+        id: string;
+        name: string;
+        email: string | null;
+        phone: string;
+        isActive: boolean;
+        createdAt: string;
+        lastLoginAt: string | null;
+      }>;
+    }>('/superadmin/owners'),
+
+  createOwner: (data: { name: string; email: string; phone: string; password: string }) =>
+    request<{ owner: { id: string; name: string; email: string; phone: string } }>(
+      '/superadmin/owners',
+      { method: 'POST', body: JSON.stringify(data) }
+    ),
+
+  /** Devolve o código novo uma única vez. */
+  rotateCode: () =>
+    request<{ accessCode: string; superAdmin: SuperAdmin }>('/superadmin/rotate-code', {
+      method: 'POST',
+    }),
+
+  unlock: (id: number) =>
+    request<{ superAdmin: SuperAdmin }>(`/superadmin/${id}/unlock`, { method: 'POST' }),
+
+  setActive: (id: number, isActive: boolean) =>
+    request<{ superAdmin: SuperAdmin }>(`/superadmin/${id}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ isActive }),
+    }),
 };
 
 // Services

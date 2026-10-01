@@ -44,6 +44,22 @@ export async function ownerLogin(req: Request, res: Response): Promise<void> {
     role: 'OWNER',
   });
 
+  // Registra o acesso. O superadmin usa para ver se a conta do dono existe e
+  // está sendo usada — uma conta de dono que nunca entrou é cadastro
+  // incompleto, e é justamente o que trava a instalação.
+  //
+  // Aguarda de propósito: em "fire and forget" a gravação pode perder a corrida
+  // com a resposta, e o painel mostraria "nunca entrou" logo após o primeiro
+  // login. A falha é engolida porque o login já é válido neste ponto.
+  try {
+    await prisma.user.update({
+      where: { id: owner.id },
+      data: { lastLoginAt: new Date() },
+    });
+  } catch {
+    // Sem efeito no login.
+  }
+
   res.json({
     user: {
       id: owner.id,
@@ -230,6 +246,19 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     if (!client) {
       throw new AppError('Cliente não encontrado', 401, 'CLIENT_NOT_FOUND');
     }
+  } else if (payload.role === 'SUPERADMIN') {
+    // Confere a conta no refresh também: desativar precisa valer para o token
+    // de 15 dias, não só para o de acesso.
+    if (typeof payload.superAdminId !== 'number') {
+      throw new AppError('Sessão de superadmin inválida', 401, 'INVALID_SESSION');
+    }
+    const admin = await prisma.superAdmin.findUnique({
+      where: { id: payload.superAdminId },
+      select: { isActive: true },
+    });
+    if (!admin || !admin.isActive) {
+      throw new AppError('Conta de superadmin inativa', 401, 'ACCOUNT_INACTIVE');
+    }
   }
 
   const { accessToken, refreshToken: newRefreshToken } = generateTokens({
@@ -237,6 +266,7 @@ export async function refreshToken(req: Request, res: Response): Promise<void> {
     role: payload.role,
     employeeId: payload.employeeId,
     clientId: payload.clientId,
+    superAdminId: payload.superAdminId,
   });
 
   res.json({ accessToken, refreshToken: newRefreshToken });
@@ -258,6 +288,28 @@ export async function logout(req: AuthRequest, res: Response): Promise<void> {
 export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   if (!req.user) {
     throw new AppError('Não autenticado', 401, 'NOT_AUTHENTICATED');
+  }
+
+  /**
+   * Superadmin vem antes de tudo: é o único papel que não vive na tabela
+   * `users`, então qualquer consulta por `sub` na tabela errada devolveria
+   * "não encontrado" e derrubaria a sessão do superadmin no primeiro F5.
+   */
+  if (req.user.role === 'SUPERADMIN') {
+    const id = req.user.superAdminId;
+    if (typeof id !== 'number') {
+      throw new AppError('Sessão de superadmin inválida', 401, 'INVALID_SESSION');
+    }
+    const admin = await prisma.superAdmin.findUnique({
+      where: { id },
+      select: { id: true, name: true, email: true, isActive: true, lastLoginAt: true },
+    });
+    if (!admin) throw new AppError('Superadmin não encontrado', 404, 'NOT_FOUND');
+    if (!admin.isActive) throw new AppError('Conta de superadmin inativa', 403, 'ACCOUNT_INACTIVE');
+
+    // De propósito, sem `codeHash`/`codeSalt`: o hash nunca sai do servidor.
+    res.json({ superAdmin: admin });
+    return;
   }
 
   if (req.user.role === 'OWNER' || req.user.role === 'EMPLOYEE') {

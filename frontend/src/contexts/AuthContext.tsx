@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { authApi, isAuthFailure } from '@services/api';
+import { authApi, superadminApi, isAuthFailure } from '@services/api';
 import type { AuthState } from '@types';
 
 interface AuthContextType extends AuthState {
@@ -13,6 +13,8 @@ interface AuthContextType extends AuthState {
   sessionError: string | null;
   loginOwner: (email: string, password: string) => Promise<void>;
   loginEmployee: (accessCode: string) => Promise<void>;
+  /** Superadmin entra por código, como o funcionário. */
+  loginSuperAdmin: (email: string, code: string) => Promise<void>;
   requestClientCode: (phone: string) => Promise<string | null>;
   verifyClientCode: (phone: string, code: string) => Promise<{ isNewClient: boolean }>;
   logout: () => void;
@@ -20,6 +22,31 @@ interface AuthContextType extends AuthState {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+/**
+ * Descobre quem está logado a partir da resposta de `/auth/me`.
+ *
+ * O endpoint devolve três envelopes diferentes e o papel está DENTRO de cada
+ * um, exceto o do superadmin, que vem em `superAdmin` sem `role` no objeto.
+ * Por isso a checagem é nesta ordem — o superadmin primeiro, senão cairia no
+ * ramo do cliente e o painel máximo viraria a área do cliente depois de um F5.
+ *
+ * Fica fora do componente porque a reidratação e o "tentar novamente" precisam
+ * exatamente da mesma decisão; duplicar essa lógica é como uma delas passa a
+ * tratar superadmin diferente da outra sem ninguém perceber.
+ */
+function identify(res: { user: any } | { client: any } | { superAdmin: any }): {
+  user: any;
+  role: 'OWNER' | 'EMPLOYEE' | 'CLIENT' | 'SUPERADMIN';
+} {
+  if ('superAdmin' in res) {
+    return { user: res.superAdmin, role: 'SUPERADMIN' };
+  }
+  if ('user' in res) {
+    return { user: res.user, role: res.user.role };
+  }
+  return { user: res.client, role: 'CLIENT' };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<AuthState>({
@@ -58,9 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // getMe já faz refresh+retry internamente quando o access expirou
         const res = await authApi.getMe();
-
-        const user = 'user' in res ? res.user : res.client;
-        const role = 'user' in res ? res.user.role : ('CLIENT' as const);
+        const { user, role } = identify(res);
 
         setState({
           user,
@@ -158,6 +183,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  /**
+   * Superadmin entra por código, igual ao funcionário.
+   *
+   * A diferença é que o código de superadmin é longo (24 caracteres, em grupos
+   * de 4) e nunca fica guardado em texto em lugar nenhum — nem no banco. Se a
+   * pessoa perder, a única saída é rotacionar.
+   */
+  const loginSuperAdmin = async (email: string, code: string) => {
+    const res = await superadminApi.login(email, code);
+    saveTokens(res.accessToken, res.refreshToken);
+    setState({
+      user: res.superAdmin,
+      accessToken: res.accessToken,
+      refreshToken: res.refreshToken,
+      isAuthenticated: true,
+      role: 'SUPERADMIN',
+    });
+  };
+
   const requestClientCode = async (phone: string) => {
     const res = await authApi.clientRequestCode(phone);
     // Em dev, retorna o código para exibir na tela
@@ -213,8 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     try {
       const res = await authApi.getMe();
-      const user = 'user' in res ? res.user : res.client;
-      const role = 'user' in res ? res.user.role : ('CLIENT' as const);
+      const { user, role } = identify(res);
 
       setSessionError(null);
       setState({
@@ -242,7 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ ...state, loading, sessionError, loginOwner, loginEmployee, requestClientCode, verifyClientCode, logout, refreshAuth }}>
+    <AuthContext.Provider value={{ ...state, loading, sessionError, loginOwner, loginEmployee, loginSuperAdmin, requestClientCode, verifyClientCode, logout, refreshAuth }}>
       {children}
     </AuthContext.Provider>
   );

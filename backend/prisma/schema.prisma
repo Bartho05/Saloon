@@ -34,6 +34,10 @@ model User {
   specialties   String[]  @default([])
   color         String?
   photoUrl      String?  // foto do rosto, para o cliente ver com quem vai agendar
+  /// Último acesso ao painel. O superadmin usa para ver se a conta existe e
+  /// está sendo usada — uma conta de dono que nunca entrou é sinal de cadastro
+  /// incompleto.
+  lastLoginAt   DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -99,6 +103,69 @@ model Appointment {
   @@index([clientId, startsAt])
   @@index([status])
   @@map("appointments")
+}
+
+/// Administrador da plataforma: o nível acima do dono do salão.
+///
+/// Existe para as duas pontas que o dono não cobre: criar o PRIMEIRO
+/// proprietário quando o sistema ainda está vazio, e enxergar todos os
+/// salões de uma vez. O dono cuida de um salão; este cuida da instalação.
+///
+/// O código de acesso NUNCA é gravado em texto. Ver `superadminCrypto.ts`:
+/// o que vai para o banco é o resultado de um scrypt com salt por conta e um
+/// pepper do servidor — não há como voltar do hash para o código.
+model SuperAdmin {
+  id        Int      @id @default(1)
+  name      String
+  email     String   @unique
+
+  /// scrypt(código + salt + pepper) em base64. Irreversível por construção.
+  codeHash  String
+  /// Salt aleatório de 16 bytes por conta, em base64.
+  codeSalt  String
+  /// Identificação do código para o operador ("a3f…9c2"), sem revelar nada
+  /// que ajude a recuperá-lo. Serve para saber qual código está ativo.
+  codeFingerprint String
+  /// Quando o código foi gerado. O código só é exibido uma vez, na criação.
+  codeCreatedAt   DateTime @default(now())
+  codeRotatedAt   DateTime?
+
+  isActive      Boolean   @default(true)
+  lastLoginAt   DateTime?
+
+  /// Trava progressiva: N tentativas erradas bloqueiam por N minutos.
+  failedAttempts Int      @default(0)
+  lockedUntil    DateTime?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  /// Toda entrada e saída fica registrada. Um acesso de nível máximo que
+  /// deixa rastro é o que torna a conta confiável.
+  audit         SuperAdminAudit[]
+
+  @@map("super_admins")
+}
+
+/// Trilha de auditoria do superadmin.
+model SuperAdminAudit {
+  id          Int      @id @default(autoincrement())
+  superAdminId Int?
+  /// LOGIN_SUCCESS | LOGIN_FAILED | LOCKED | UNLOCKED | CREATE_OWNER
+  /// | ROTATE_CODE | DEACTIVATE
+  action      String
+  /// Endereço de quem tentou. Guardado para investigating origem.
+  ip          String?
+  userAgent   String?
+  /// Contexto legível: qual e-mail, qual salonId, etc. Sem segredo.
+  detail      String?
+  createdAt   DateTime @default(now())
+
+  superAdmin  SuperAdmin? @relation(fields: [superAdminId], references: [id], onDelete: SetNull)
+
+  @@index([action, createdAt])
+  @@index([superAdminId, createdAt])
+  @@map("super_admin_audit")
 }
 
 model SalonSettings {

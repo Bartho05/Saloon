@@ -69,6 +69,28 @@ export const bookingRateLimiter = rateLimit({
   skip: skipInTests,
 });
 
+/**
+ * Limite do login de superadmin.
+ *
+ * Bem mais apertado que o de login comum (5 contra 10 por 15 minutos). É o
+ * acesso que cria o primeiro proprietário, então é o alvo mais tentador que
+ * existe na aplicação: quem o obtém controla a instalação inteira. O
+ * `skipSuccessfulRequests` evita que o superadmin legítimo, que pode entrar
+ * algumas vezes ao dia, consuma a própria cota.
+ */
+export const superAdminRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutos
+  max: 5, // 5 tentativas por janela
+  message: {
+    error: 'Muitas tentativas. Aguarde 15 minutos antes de tentar de novo.',
+    code: 'SUPERADMIN_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  skip: skipInTests,
+});
+
 export const whatsappRateLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minuto
   max: 5, // 5 mensagens por minuto
